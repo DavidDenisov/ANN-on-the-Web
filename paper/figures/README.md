@@ -4,7 +4,7 @@ From the repository root, run `python3 paper/figures/generate.py` with matplotli
 
 The paper uses:
 
-- `screenshots/search-desktop.png` and `screenshots/lab-desktop.png`: the full desktop viewport captures, shown side by side without close-up crops. They were captured from the public demo on October 30, 2026 at 1440×960 CSS pixels and 2× pixel density. Search shows a real default ten-result query; the lab is ready before a run. No result content or measurements were inserted. Visible timings belong to the capture, not the original benchmark averages.
+- `screenshots/search-desktop.png` and `screenshots/lab-desktop.png`: the full desktop viewport captures, shown side by side without close-up crops. They were captured from the public demo on October 30, 2026 at 1440×1200 CSS pixels and 2× pixel density, with capture-only 24px text for labels, controls, tables and passages, and 28px result/lab headings. Table labels wrap where needed. Search shows a real default ten-result query; the lab is ready before a run. No result content or measurements were inserted. Visible timings belong to the capture, not the original benchmark averages.
 - `architecture.pdf`: startup and the five local-search steps, with selective static-file downloads.
 - `probe-large.pdf`: the 32k FP16 probe sweep, median latency/interquartile band and source recovery with 95% Wilson intervals.
 - `large-count-table.tex` and rows: the three four-probe count settings. The full nine-setting original count/probe matrix remains in `../results/retrieval-summary.csv`.
