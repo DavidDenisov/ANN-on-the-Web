@@ -1,0 +1,60 @@
+{
+  "seed": 20261022,
+  "model_revision": "751bff37182d3f1213fa05d7196b954e230abad9",
+  "corpus_count": 100000,
+  "eligible_count": 616,
+  "sampled_passages": 100,
+  "lengths": {
+    "64": {
+      "samples": 334,
+      "mean_ms": 9.089685628741345,
+      "p95_ms": 9.470000000030268,
+      "min_ms": 8.71999999997206,
+      "max_ms": 12.690000000002328
+    },
+    "128": {
+      "samples": 333,
+      "mean_ms": 16.865360360358025,
+      "p95_ms": 17.260000000009313,
+      "min_ms": 16.35999999998603,
+      "max_ms": 24.5
+    },
+    "256": {
+      "samples": 333,
+      "mean_ms": 33.840000000000614,
+      "p95_ms": 34.50500000000466,
+      "min_ms": 33.20999999996275,
+      "max_ms": 40.48999999999069
+    }
+  },
+  "threads": 4,
+  "requested_threads": 0,
+  "transformers": "4.3.1",
+  "cross_origin_isolated": true,
+  "measured_at": "2026-10-24T18:13:04.962Z",
+  "cpu": "12th Gen Intel(R) Core(TM) i5-12400F",
+  "browser_version": "155.0.8059.84",
+  "libraryImportMs": {
+    "samples": 100,
+    "mean_ms": 371.3996999999999,
+    "p95_ms": 406.1499999999651,
+    "min_ms": 342.3099999999977,
+    "max_ms": 442.48499999998603
+  },
+  "downloadMs": {
+    "samples": 100,
+    "mean_ms": 1444.0104499999998,
+    "p95_ms": 1486.875,
+    "min_ms": 1382.9700000000012,
+    "max_ms": 1514.8150000000023
+  },
+  "initializationMs": {
+    "samples": 100,
+    "mean_ms": 642.3027999999997,
+    "p95_ms": 666.4700000000012,
+    "min_ms": 610.9949999999953,
+    "max_ms": 964.2600000000093
+  },
+  "modelBytes": 23685047,
+  "runtimeBytes": 14289219
+}

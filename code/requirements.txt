@@ -1,0 +1,6 @@
+numpy>=1.24
+pyarrow>=12
+huggingface_hub>=0.29.2
+tqdm>=4.66
+# Install GPU-enabled Faiss separately with conda; see code/docs/benchmarks.md.
+matplotlib>=3.7

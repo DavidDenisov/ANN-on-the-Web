@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Wikipedia Semantic Search</title>
+  <meta name="description" content="Search 35.2 million Wikipedia passages using the paper's uploaded indexes, with embeddings computed in your browser.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='.9em' font-size='56'%3E📚%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="assets/styles.css">
+  <script type="module" src="assets/search.mjs"></script>
+</head>
+<body class="search-page">
+  <a class="skip-link" href="#query">Skip to search</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="header-copy">
+        <h1>🔍 Wikipedia Semantic Search</h1>
+        <p class="tagline">Fully client-side. Your query stays with you.</p>
+        <p class="archive-description">Search 35.2 million Wikipedia passages by meaning.</p>
+      </div>
+      <nav class="header-links" aria-label="Demo pages">
+        <a href="index.html" aria-current="page">🔍 Search demo</a>
+        <a class="lab-link" href="benchmark.html">📊 Clustering lab →</a>
+      </nav>
+    </div>
+  </header>
+  <main id="main-layout">
+    <div id="main-content-inner">
+      <section class="panel upload-panel" aria-labelledby="queryHeading">
+        <div class="panel-header">
+          <h2 id="queryHeading">✍️ Find a passage</h2>
+          <p class="panel-description">Describe what you’re looking for</p>
+        </div>
+        <div class="status loading" id="status" role="status" aria-live="polite">Loading search…</div>
+        <progress id="progress" max="100" aria-label="Search progress" hidden></progress>
+        <form id="searchForm">
+          <label class="query-label" for="query">Your question or description</label>
+          <textarea id="query" name="query" rows="5" maxlength="2000" required placeholder="How do plants turn sunlight into energy?" aria-describedby="queryHint"></textarea>
+          <p class="query-hint" id="queryHint">Use a sentence or a question. Search is based on meaning.</p>
+          <div class="examples" aria-label="Example queries">
+            <span>Try an example</span>
+            <button type="button" data-query="How do plants turn sunlight into energy?">🌿 Plants & sunlight</button>
+            <button type="button" data-query="Why is the universe getting bigger?">🌌 Our universe</button>
+            <button type="button" data-query="How can computers learn from examples?">🧠 Learning from data</button>
+          </div>
+          <details class="search-options">
+            <summary>⚙️ Search options</summary>
+            <div class="search-settings">
+              <div><label for="clusterCount">Centroids</label><select id="clusterCount"><option value="8192">8,192</option><option value="16384">16,384</option><option value="32768" selected>32,768</option></select></div>
+              <div><label for="codec">Centroid format</label><select id="codec" disabled><option value="sq6">SQ6</option></select></div>
+              <div><label for="probes">Clusters to search</label><input id="probes" type="number" min="1" max="100" value="4" step="1" required disabled></div>
+              <div><label for="resultK">Results</label><input id="resultK" type="number" min="1" value="10" step="1" required disabled></div>
+            </div>
+            <p>Searching more clusters can improve matches and downloads more passage vectors. Smaller centroid formats reduce the routing download.</p>
+          </details>
+          <div class="upload-controls">
+            <button class="btn btn-primary" id="searchBtn" type="submit" disabled>🔍 Search passages</button>
+            <button class="btn btn-secondary" id="clearBtn" type="button" hidden>Clear</button>
+          </div>
+        </form>
+        <button class="btn btn-secondary" id="cancelBtn" type="button" hidden>Cancel</button>
+        <p class="dataset-summary" id="indexInfo">Loading passage index…</p>
+      </section>
+      <section class="panel results-panel" aria-labelledby="resultsHeading" aria-busy="false">
+        <div class="panel-header">
+          <h2 id="resultsHeading">🔍 Search results</h2>
+          <p class="panel-description" id="resultsInfo">Enter a query to search the loaded passages.</p>
+        </div>
+        <div id="results">
+          <div class="placeholder">
+            <span class="placeholder-icon" aria-hidden="true">📄</span>
+            <h3 class="placeholder-title">No search performed yet</h3>
+            <p class="placeholder-subtitle">Enter a question or choose an example to find related passages.</p>
+          </div>
+        </div>
+      </section>
+    </div>
+    <section class="about-section" aria-labelledby="aboutHeading">
+      <h2 id="aboutHeading">About this search</h2>
+      <p>Search the paper's full corpus of 35,167,920 Wikipedia passages using its uploaded vector clusters.</p>
+      <p><strong>Your query and embedding stay in this browser.</strong> The model and centroids load in a background worker when you open this page. Your browser retrieves the selected vector clusters and result text when you search.</p>
+      <details><summary>How search is measured</summary>
+        <p>Results separate embedding time, centroid setup, vector retrieval and result-text loading. The model and centroids are reused for later searches; selected vector clusters are downloaded for each search. Decoded passage metadata stays in a limited memory cache until this page closes or reloads.</p>
+      </details>
+    </section>
+  </main>
+</body>
+</html>

@@ -1,0 +1,29 @@
+{
+  "measuredAt": "2026-10-25T03:07:12.723Z",
+  "browserVersion": "155.0.8059.84",
+  "protocol": "varied-ten-result-text-warmed-no-store",
+  "results_per_trial": 10,
+  "sampled_passages": 10000,
+  "warmed_files": 9356,
+  "warmup_loads": 936,
+  "files_per_trial": {
+    "min": 9,
+    "max": 10
+  },
+  "elapsed": {
+    "samples": 1000,
+    "mean_ms": 34.891355000000445,
+    "p95_ms": 54.85999999940395,
+    "min_ms": 25.994999999180436,
+    "max_ms": 303.84999999962747
+  },
+  "decode": {
+    "samples": 1000,
+    "mean_ms": 5.942594999905675,
+    "p95_ms": 7.375,
+    "min_ms": 4.464999997988343,
+    "max_ms": 9.429999999701977
+  },
+  "mean_decoded_bytes_per_trial": 2215280.976,
+  "mean_encoded_bytes_per_trial": 695126.195
+}

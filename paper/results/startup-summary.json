@@ -1,0 +1,13 @@
+{
+  "measuredAt": "2026-10-27T18:58:39.199Z",
+  "browserVersion": "155.0.8059.84",
+  "protocol": "worker-creation-to-ready",
+  "clusters": 32768,
+  "codec": "sq6",
+  "threads": 4,
+  "samples": 100,
+  "mean_ms": 2456.746849999614,
+  "p95_ms": 2529.75,
+  "min_ms": 2356.239999998361,
+  "max_ms": 3188.364999998361
+}

@@ -1,0 +1,15 @@
+{
+  "complete": true,
+  "samples": 1000,
+  "corpus_count": 35167920,
+  "shards_searched": 145,
+  "self_matches_excluded": true,
+  "identical_vector_neighbours": 7,
+  "cosine_mean": 0.7525320527731462,
+  "cosine_median": 0.7426258298590793,
+  "l2_distance_mean": 0.681444901162258,
+  "l2_distance_median": 0.7174596431847854,
+  "noise_mean_l2_ratio": 0.5546968341632015,
+  "noise_median_l2_ratio": 0.5270475823113276,
+  "elapsed_seconds": 151.04274807599722
+}

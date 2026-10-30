@@ -1,0 +1,42 @@
+{
+  "measuredAt": "2026-10-26T19:09:15.244Z",
+  "protocol": "repeated-live-query-warmed-no-store",
+  "inputs": {
+    "query": "How do plants turn sunlight into energy?",
+    "index_path": "data/demo/pages/root/data/search-full-brotli/c32768/manifest.json",
+    "codec": "sq6",
+    "probes": 4,
+    "k": 10,
+    "warmup_queries": 100,
+    "timed_queries": 1000,
+    "cache": "no-store"
+  },
+  "embedding": {
+    "samples": 1000,
+    "mean_ms": 2.991180000000633,
+    "p95_ms": 3.75
+  },
+  "retrieval": {
+    "samples": 1000,
+    "mean_ms": 90.66380499999784,
+    "p95_ms": 107.7050000000745
+  },
+  "text": {
+    "samples": 1000,
+    "mean_ms": 36.283660000028085,
+    "p95_ms": 44.325000000186265
+  },
+  "total": {
+    "samples": 1000,
+    "mean_ms": 130.29803499998712,
+    "p95_ms": 150.33499999996275
+  },
+  "candidates": 3485,
+  "vectorBytes": 2480789,
+  "firstResult": {
+    "id": 1662981,
+    "title": "Sunlight",
+    "text": "Sunlight is a key factor in photosynthesis, the process used by plants and other autotrophic organisms to convert light energy, normally from the Sun, into chemical energy that can be used to synthesize carbohydrates and to fuel the organisms' activities.",
+    "distance": 0.5384722506680865
+  }
+}
