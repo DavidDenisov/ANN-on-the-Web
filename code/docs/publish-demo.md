@@ -76,3 +76,13 @@ Keep metadata and its upload package on the same filesystem. Packaging uses hard
 Check the default search and ten result texts, then the lab. Metadata requests should use `brotli-batch-*` hosts with `.bin.br` filenames and `Content-Encoding: br`. Vector requests should retain their benchmark hosts. Local source edits are not automatically deployed.
 
 For multithreaded inference, check that `crossOriginIsolated` is `true` in both the page and embedding worker. The worker's configured `env.backends.onnx.wasm.numThreads` starts at zero (automatic) and resolves to the runtime's device-dependent count. A capable desktop should create additional ONNX worker threads; non-isolated hosting falls back to one thread.
+
+## Self-hosting and archival
+
+GitHub preserves source, builders and compact results; it does not preserve the live text/vector assets or guarantee the existing Pages preview URLs. Before retiring or migrating the live deployment, archive the prepared root manifests, `routing.json`, `hosting.json`, deployment receipts and all referenced data files separately. Retain the encoder revision and corpus identifiers. Deposit a versioned archive with a persistent identifier if long-term artifact availability is required; this repository does not claim a Zenodo deposit.
+
+The 1,000-file batch size is a packaging choice in `cloudflare.py` and `prepare_demo_pages.py`, below Pages' 20,000-file Free-plan limit. It is not a provider-imposed upload ceiling.
+
+For an object-storage deployment, upload the immutable vector/centroid gzip files and Brotli text batches, then rewrite manifest file URLs and the metadata batch URL template to the new public HTTPS locations. Preserve file contents, byte sizes, IDs and batch numbering. Serve `.bin.br` with `Content-Encoding: br`; keep vector `.gz` as explicit binary gzip for the client's decoder. Allow CORS and expose content length/resource timings where needed. Serve the frontend with the existing COOP/COEP headers and ensure cross-origin model/data assets satisfy isolation requirements. Update the three fixed manifest paths in `search.mjs` (or use the packager's path rewriting). Test startup, one query at each cluster split, ten attributed result texts and cancellation before switching the public URL.
+
+The compact `paper/results/cluster-distribution-inputs.json.gz` preserves only public manifest size fields, not a deployable index manifest or the vector payloads. It reproduces cluster-distribution statistics offline.

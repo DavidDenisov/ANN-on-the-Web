@@ -1,0 +1,69 @@
+{
+  "measured_at": "2026-10-30T01:57:22.715Z",
+  "protocol": "Descriptive statistics from public manifests; nearest-rank quantiles. Four-probe upper bound sums the four largest files, not an observed query percentile.",
+  "indexes": [
+    {
+      "clusters": 8192,
+      "count": 35167920,
+      "manifest_url": "https://wiki-ann-demo-20261022.pages.dev/data/search-full-brotli/c8192/manifest.json",
+      "sha256": "82596d87b1b2b9d40c6c7e700f0c89e1ec01e8fa3afd6f60459cdb8a798aa18e",
+      "cluster_passages": {
+        "min": 86,
+        "p50": 4189,
+        "p95": 6976,
+        "max": 15987,
+        "mean": 4292.958984375
+      },
+      "cluster_gzip_bytes": {
+        "min": 6529,
+        "p50": 2977740,
+        "p95": 4965063,
+        "max": 11421970,
+        "mean": 3051414.8630371094
+      },
+      "four_probe_upper_bound_bytes": 40794906
+    },
+    {
+      "clusters": 16384,
+      "count": 35167920,
+      "manifest_url": "https://wiki-ann-demo-20261022.pages.dev/data/search-full-brotli/manifest.json",
+      "sha256": "3862a95fee66db2b57d7f3f07543abc3c275a0433d7c198930ef49c6bca3524f",
+      "cluster_passages": {
+        "min": 2,
+        "p50": 2089,
+        "p95": 3771,
+        "max": 14144,
+        "mean": 2146.4794921875
+      },
+      "cluster_gzip_bytes": {
+        "min": 1499,
+        "p50": 1483964,
+        "p95": 2684624,
+        "max": 8951692,
+        "mean": 1524823.9416503906
+      },
+      "four_probe_upper_bound_bytes": 27252277
+    },
+    {
+      "clusters": 32768,
+      "count": 35167920,
+      "manifest_url": "https://wiki-ann-demo-20261022.pages.dev/data/search-full-brotli/c32768/manifest.json",
+      "sha256": "28be736432748a90f2f1aed5d223d6e7afa18b4f1e8425aa6ded4b1122139772",
+      "cluster_passages": {
+        "min": 1,
+        "p50": 1023,
+        "p95": 2188,
+        "max": 8263,
+        "mean": 1073.23974609375
+      },
+      "cluster_gzip_bytes": {
+        "min": 790,
+        "p50": 726199,
+        "p95": 1556618,
+        "max": 5885044,
+        "mean": 761918.2763366699
+      },
+      "four_probe_upper_bound_bytes": 19322757
+    }
+  ]
+}

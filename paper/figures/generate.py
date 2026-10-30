@@ -1,6 +1,7 @@
 """Build compact figures/tables from the retained paper measurements."""
 
 import csv
+import gzip
 import json
 import math
 from pathlib import Path
@@ -8,8 +9,6 @@ import matplotlib
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt
 from reportlab.pdfgen import canvas
-from reportlab.platypus import Paragraph
-from reportlab.lib.styles import ParagraphStyle
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = Path(__file__).resolve().parent
@@ -20,7 +19,37 @@ def read(path):
         return list(csv.DictReader(stream))
 
 
+def wilson(successes, total):
+    assert isinstance(total, int) and total > 0 and 0 <= successes <= total
+    z = 1.959963984540054
+    p = successes / total
+    denominator = 1 + z * z / total
+    centre = (p + z * z / (2 * total)) / denominator
+    radius = z * math.sqrt((p * (1 - p) + z * z / (4 * total)) / total) / denominator
+    return max(0, centre - radius), min(1, centre + radius)
+
+
+assert math.isclose(wilson(0, 10)[0], 0, abs_tol=1e-15)
+assert math.isclose(wilson(10, 10)[1], 1, abs_tol=1e-15)
+assert all(math.isclose(a, b, abs_tol=1e-12) for a, b in
+           zip(wilson(5, 10), (0.236593090512564, 0.763406909487436)))
+
+
 rows = read("results/retrieval-summary.csv")
+distribution = json.loads((ROOT / 'results/cluster-distribution.json').read_text())
+with gzip.open(ROOT / 'results/cluster-distribution-inputs.json.gz', 'rt') as stream:
+    distribution_inputs = json.load(stream)
+for item, source in zip(distribution['indexes'], distribution_inputs, strict=True):
+    sizes = sorted(source['cluster_sizes'])
+    payloads = sorted(source['cluster_bytes'])
+    assert item['clusters'] == source['clusters'] == len(sizes) == len(payloads)
+    assert sum(sizes) == item['count'] == 35167920
+    for values, key in [(sizes, 'cluster_passages'), (payloads, 'cluster_gzip_bytes')]:
+        expected = dict(min=values[0], max=values[-1], mean=sum(values) / len(values),
+                        p50=values[math.ceil(len(values) * .5) - 1],
+                        p95=values[math.ceil(len(values) * .95) - 1])
+        assert item[key] == expected
+    assert item['four_probe_upper_bound_bytes'] == sum(payloads[-4:])
 supplement_rows = read("results/32k-summary.csv")
 assert len(supplement_rows) == 12
 assert all(r['clusters'] == '32768' and r['noise'] == 'large'
@@ -32,6 +61,27 @@ new_setups = read("results/32k-centroid-summary.csv")
 assert len(new_setups) == 6 and all(r['clusters'] == '32768' and int(r['samples']) == 1000
                                    for r in new_setups)
 setups.update({(32768, r['codec']): r for r in new_setups})
+intervals = []
+for row in supplement_rows:
+    total = int(row['queries'])
+    successes = round(float(row['source_recovery']) * total)
+    assert math.isclose(successes / total, float(row['source_recovery']), abs_tol=1e-12)
+    low, high = wilson(successes, total)
+    intervals.append(dict(clusters=32768, probes=int(row['probes']), codec=row['codec'],
+                          queries=total, successes=successes, recovery=successes / total,
+                          wilson95_low=low, wilson95_high=high))
+with (ROOT / 'results/recovery-intervals.csv').open('w', newline='') as stream:
+    writer = csv.DictWriter(stream, fieldnames=list(intervals[0]))
+    writer.writeheader()
+    writer.writerows(intervals)
+default, = [r for r in intervals if r['codec'] == 'sq6' and r['probes'] == 4]
+sq4 = setups[32768, 'sq4']
+sq4_mbps = int(sq4['centroid_bytes']) * 8 / float(sq4['download_mean_ms']) / 1000
+(ROOT / 'results/review-derived.tex').write_text(
+    '% Derived from retained summaries; regenerate with paper/figures/generate.py.\n'
+    + rf'\newcommand{{\DefaultRecoveryLow}}{{{100 * default["wilson95_low"]:.2f}}}' + '\n'
+    + rf'\newcommand{{\DefaultRecoveryHigh}}{{{100 * default["wilson95_high"]:.2f}}}' + '\n'
+    + rf'\newcommand{{\SQFourMbps}}{{{sq4_mbps:.0f}}}' + '\n')
 probes = [1, 2, 3, 4, 6, 8, 10]
 probe_rows = read("figures/probe-32k-summary.csv")
 assert [int(r['probes']) for r in probe_rows] == probes
@@ -53,6 +103,12 @@ axes[0].fill_between(probes, [float(r['query_p25_ms']) for r in probe_rows],
 axes[0].plot(probes, [float(r['query_median_ms']) for r in probe_rows], color='#0072B2', marker='o', markersize=3)
 axes[1].plot(probes, [100 * float(r['source_recovery']) for r in probe_rows],
              color='#0072B2', marker='o', markersize=3)
+recovery = [float(r['source_recovery']) for r in probe_rows]
+bounds = [wilson(round(p * 10000), 10000) for p in recovery]
+axes[1].errorbar(probes, [100 * p for p in recovery],
+                 yerr=[[100 * (p - b[0]) for p, b in zip(recovery, bounds)],
+                       [100 * (b[1] - p) for p, b in zip(recovery, bounds)]],
+                 fmt='none', ecolor='#0072B2', capsize=2)
 for axis in axes:
     axis.set_xticks(probes)
     axis.grid(axis="y", color="0.88", linewidth=.5)
@@ -69,7 +125,7 @@ count_rows = sorted((r for r in rows if r['noise'] == 'large' and 'counts' in r[
 assert [(int(r['clusters']), int(r['probes'])) for r in count_rows] == [
     (c, n) for c in (8192, 16384, 32768) for n in (1, 4, 8)]
 lines = []
-for i, row in enumerate(count_rows):
+for i, row in enumerate(r for r in count_rows if r['probes'] == '4'):
     if i % 2:
         lines.append(r'\rowcolor{black!4}')
     lines.append(f"{int(row['clusters'])} & {int(row['probes'])} & {100 * float(row['source_recovery']):.1f} & "
@@ -186,134 +242,3 @@ c.drawString(7, 7, "Reuse the model and centroids across queries.")
 c.showPage()
 c.save()
 print("Generated compact tables, a two-panel probe plot, and architecture PDF.")
-
-
-c = canvas.Canvas(str(OUT / 'lab-example.pdf'), pagesize=(246, 210))
-c.setTitle('Simplified clustering lab: settings and one-versus-four-probe comparison')
-c.setFillColorRGB(.96, .97, .98)
-c.rect(1.5, 1.5, 243, 137.5, fill=1, stroke=0)
-c.setStrokeColorRGB(.7, .7, .7)
-c.roundRect(.5, .5, 245, 209, 3, stroke=1, fill=0)
-c.setFillColorRGB(.12, .23, .35)
-c.setFont('Helvetica-Bold', 7)
-c.drawString(9, 197, 'CLUSTERING LAB')
-c.setFont('Helvetica', 7)
-c.drawRightString(237, 197, '16k clusters / FP16')
-c.setFillColorRGB(.25, .25, .25)
-c.setFont('Helvetica', 6.7)
-c.drawString(9, 181, 'Checks: cluster count | probes | centroid compression')
-c.setFont('Helvetica', 7.5)
-c.drawString(9, 165, '10 queries | High noise | Top 1')
-c.drawString(9, 149, 'Probe sweep: 1, 4')
-c.setStrokeColorRGB(.7, .7, .7)
-c.roundRect(181, 143, 56, 18, 3, stroke=1, fill=0)
-c.setFillColorRGB(.12, .23, .35)
-c.setFont('Helvetica-Bold', 7)
-c.drawCentredString(209, 149, 'Run check')
-c.line(9, 139, 237, 139)
-c.drawString(9, 127, 'COMPARISON')
-c.setFont('Helvetica', 7)
-c.drawRightString(176, 127, '1 probe')
-c.drawRightString(237, 127, '4 probes')
-# Values come from the retained ten-query lab screenshot, not the paper benchmark.
-for y, (label, one, four) in zip((109, 93, 77, 61, 45), [
-        ('Candidates checked', '2,370', '9,226'),
-        ('Source recovery@1', '70%', '100%'),
-        ('Mean retrieval time', '65.1 ms', '192.6 ms'),
-        ('95th percentile retrieval time', '96.4 ms', '328.1 ms'),
-        ('Vector download / query', '1.68 MB', '6.56 MB')]):
-    c.setFillColorRGB(.15, .15, .15)
-    c.setFont('Helvetica', 7)
-    assert c.stringWidth(label, 'Helvetica', 7) < 128
-    c.drawString(9, y, label)
-    c.setFont('Helvetica-Bold', 8)
-    c.drawRightString(176, y, one)
-    c.drawRightString(237, y, four)
-c.setFillColorRGB(.3, .3, .3)
-c.setFont('Helvetica', 6.1)
-c.drawString(9, 12, 'Ten-query illustration; embedding excluded.')
-c.showPage()
-c.save()
-print('Created the single-column lab panel from the retained ten-query screenshot.')
-
-from html import unescape
-from urllib.parse import quote
-from xml.sax.saxutils import escape
-
-example = json.loads((ROOT / 'results/query-example.json').read_text())
-startup = json.loads((ROOT / 'results/startup-summary.json').read_text())
-assert startup['clusters'] == 32768 and startup['codec'] == 'sq6' and startup['samples'] == 100
-passage = example['firstResult']
-wiki_url = 'https://en.wikipedia.org/wiki/' + quote(unescape(passage['title']).replace(' ', '_'), safe="!'()*-._~")
-c = canvas.Canvas(str(OUT / 'search-example.pdf'), pagesize=(246, 210))
-c.setTitle('Example query and passage with startup, query stages, and directly measured total')
-c.setFillColorRGB(.96, .97, .98)
-c.rect(1.5, 1.5, 243, 95.5, fill=1, stroke=0)
-c.setStrokeColorRGB(.7, .7, .7)
-c.roundRect(.5, .5, 245, 209, 3, stroke=1, fill=0)
-c.saveState()
-c.translate(0, 70)
-c.setFillColorRGB(.12, .23, .35)
-c.setFont('Helvetica-Bold', 7)
-c.drawString(9, 127, 'EXAMPLE QUERY')
-c.setFont('Helvetica', 7)
-c.drawRightString(237, 127, '32k clusters / SQ6')
-query_style = ParagraphStyle('query', fontName='Helvetica', fontSize=9, leading=11)
-query = Paragraph(escape(example['inputs']['query']), query_style)
-_, height = query.wrap(228, 26)
-assert height <= 26
-query.drawOn(c, 9, 117 - height)
-c.setFillColorRGB(.25, .25, .25)
-c.setFont('Helvetica', 6.3)
-c.drawString(9, 99, f"{example['inputs']['k']} results | {example['candidates']:,} checked | "
-             f"{example['inputs']['probes']} clusters | {example['vectorBytes']/1e6:.2f} MB vectors")
-c.setFillColorRGB(.12, .23, .35)
-c.setFont('Helvetica-Bold', 9)
-title = '1  ' + unescape(passage['title'])
-c.drawString(9, 85, title)
-c.setFillColorRGB(.05, .28, .55)
-c.setFont('Helvetica', 6.8)
-wiki_label = wiki_url.removeprefix('https://')
-wiki_width = c.stringWidth(wiki_label, 'Helvetica', 6.8)
-assert wiki_width + c.stringWidth(title, 'Helvetica-Bold', 9) + 18 < 228
-c.drawRightString(237, 85, wiki_label)
-c.linkURL(wiki_url, (237 - wiki_width, 83, 237, 93), relative=1, thickness=0)
-snippet = ' '.join(passage['text'].split()[:24]).rstrip(' ,.;:') + '...'
-body_style = ParagraphStyle('snippet', fontName='Helvetica', fontSize=8, leading=9.5)
-body = Paragraph(escape(snippet), body_style)
-_, height = body.wrap(228, 36)
-assert height <= 36
-body.drawOn(c, 9, 74 - height)
-c.setFillColorRGB(.25, .25, .25)
-c.setFont('Helvetica', 6.7)
-c.drawString(9, 35.5, f"Passage {passage['id']} | Squared L2 distance: {passage['distance']:.4f}")
-c.restoreState()
-c.setStrokeColorRGB(.7, .7, .7)
-c.line(9, 97, 237, 97)
-c.setFillColorRGB(.12, .23, .35)
-c.setFont('Helvetica-Bold', 7)
-c.drawString(9, 86, 'MEASURED CLIENT COSTS')
-c.setFont('Helvetica', 6.7)
-c.drawRightString(176, 86, 'Mean')
-c.drawRightString(237, 86, '95th percentile')
-for y, (label, detail, stats, scale, precision, unit) in zip((70, 56, 42, 28, 14), [
-        ('Startup (once; phases overlap)', 'Load model, runtime + 32k/SQ6 centroids', startup, 1000, 2, 's'),
-        ('Encode query as vector', 'Displayed question', example['embedding'], 1, 1, 'ms'),
-        ('Fetch + rank candidate vectors', '32k/SQ6, four probes, top 10', example['retrieval'], 1, 1, 'ms'),
-        ('Load text for top 10 results', 'Download + decompress + decode', example['text'], 1, 1, 'ms'),
-        ('Complete query (measured)', 'Embedding + vectors + text; excludes DOM', example['total'], 1, 1, 'ms')]):
-    c.setFillColorRGB(.15, .15, .15)
-    c.setFont('Helvetica', 7)
-    assert c.stringWidth(label, 'Helvetica', 7) < 128
-    c.drawString(9, y, label)
-    c.setFillColorRGB(.3, .3, .3)
-    c.setFont('Helvetica', 6)
-    assert c.stringWidth(detail, 'Helvetica', 6) < 128
-    c.drawString(9, y - 7.5, detail)
-    c.setFillColorRGB(.15, .15, .15)
-    c.setFont('Helvetica-Bold', 8)
-    c.drawRightString(176, y, f"{stats['mean_ms'] / scale:.{precision}f} {unit}")
-    c.drawRightString(237, y, f"{stats['p95_ms'] / scale:.{precision}f} {unit}")
-c.showPage()
-c.save()
-print('Created the single-column query/result panel with reference benchmark timings.')

@@ -15,7 +15,7 @@
     <div class="header-inner">
       <div class="header-copy">
         <h1>🔍 Wikipedia Semantic Search</h1>
-        <p class="tagline">Fully client-side. Your query stays with you.</p>
+        <p class="tagline">Query embedding and ranking run in your browser.</p>
         <p class="archive-description">Search 35.2 million Wikipedia passages by meaning.</p>
       </div>
       <nav class="header-links" aria-label="Demo pages">
@@ -51,7 +51,7 @@
               <div><label for="probes">Clusters to search</label><input id="probes" type="number" min="1" max="100" value="4" step="1" required disabled></div>
               <div><label for="resultK">Results</label><input id="resultK" type="number" min="1" value="10" step="1" required disabled></div>
             </div>
-            <p>Searching more clusters can improve matches and downloads more passage vectors. Smaller centroid formats reduce the routing download.</p>
+            <p>Searching more clusters can improve matches and downloads more passage vectors. Smaller centroid formats reduce the routing download. More than ten probes, especially at 8,192 clusters, can transfer hundreds of MB per search; use a small probe count on metered connections.</p>
           </details>
           <div class="upload-controls">
             <button class="btn btn-primary" id="searchBtn" type="submit" disabled>🔍 Search passages</button>
@@ -59,6 +59,7 @@
           </div>
         </form>
         <button class="btn btn-secondary" id="cancelBtn" type="button" hidden>Cancel</button>
+        <p class="query-hint">A first visit loads about 47 MB of model, runtime and routing data at the default settings. Searches download additional vectors and text.</p>
         <p class="dataset-summary" id="indexInfo">Loading passage index…</p>
       </section>
       <section class="panel results-panel" aria-labelledby="resultsHeading" aria-busy="false">
@@ -78,7 +79,8 @@
     <section class="about-section" aria-labelledby="aboutHeading">
       <h2 id="aboutHeading">About this search</h2>
       <p>Search the paper's full corpus of 35,167,920 Wikipedia passages using its uploaded vector clusters.</p>
-      <p><strong>Your query and embedding stay in this browser.</strong> The model and centroids load in a background worker when you open this page. Your browser retrieves the selected vector clusters and result text when you search.</p>
+      <p><strong>Your query and embedding stay in this browser.</strong> The model and centroids load in a background worker when you open this page. Your browser retrieves the selected vector clusters and result text when you search. The host/CDN sees your IP address, request timing, cluster IDs and text-batch IDs. These can reveal semantic interests and likely results; local query processing does not hide these access patterns.</p>
+      <p>Passages are extracted from Wikipedia and credited to the linked articles and their contributors under the applicable <a href="https://en.wikipedia.org/wiki/Wikipedia:Copyrights">CC BY-SA terms</a>. Embeddings are provided by <a href="https://huggingface.co/datasets/maloyan/wikipedia-22-12-en-embeddings-all-MiniLM-L6-v2">Narek Maloyan</a>.</p>
       <details><summary>How search is measured</summary>
         <p>Results separate embedding time, centroid setup, vector retrieval and result-text loading. The model and centroids are reused for later searches; selected vector clusters are downloaded for each search. Decoded passage metadata stays in a limited memory cache until this page closes or reloads.</p>
       </details>

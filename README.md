@@ -2,6 +2,8 @@
 
 Semantic search over 35,167,920 Wikipedia passages using local query embedding and ranking with selective downloads from static hosting.
 
+- [Paper PDF](paper/main.pdf)
+- [Review follow-up](code/docs/review-follow-up.md)
 - [Search demo](https://wiki-ann-demo-20261022.pages.dev/client_wiki/)
 - [Clustering lab](https://wiki-ann-demo-20261022.pages.dev/client_wiki/benchmark.html)
 
@@ -68,3 +70,9 @@ These checks cover centroid formats, vector ranking, metadata decoding/caching, 
 Raw datasets, prepared indexes, model/browser caches, and full trial records belong under `code/data/` and are excluded from Git. Compact paper summaries remain in `paper/results/`. Compiled papers, caches, and local review-tool output are also excluded.
 
 The bundled Inter fonts include their [license](code/client_wiki/assets/fonts/OFL.txt). The ACM template retains its original notices and sources under `paper/`.
+
+## Data attribution and hosting
+
+See [data attribution](DATA-NOTICE.md) for Wikipedia and embedding provenance. The public repository contains source, compact measurements and screenshots; it does not redistribute the full text or vector indexes. Live CDN availability is separate from source availability. The [publishing guide](code/docs/publish-demo.md#self-hosting-and-archival) describes preserving manifests and moving assets to object storage.
+
+The source includes new bandwidth and access-pattern notices; this GitHub publication does not deploy those HTML changes to the existing Cloudflare demo.
