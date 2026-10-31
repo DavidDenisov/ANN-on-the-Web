@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Clustering lab · Wikipedia Semantic Search</title>
+  <meta name="description" content="Measure clustering recall and live browser download and search time on prepared datasets.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='.9em' font-size='56'%3E📊%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="assets/styles.css">
+  <script type="module" src="assets/lab.mjs"></script>
+</head>
+<body class="benchmark-page">
+  <a class="skip-link" href="#controls">Skip to benchmark settings</a>
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="header-copy">
+        <h1>📊 Clustering lab</h1>
+        <p class="tagline">Measure the tradeoffs, in your browser.</p>
+        <p class="archive-description">Explore search speed, download size and centroid compression.</p>
+      </div>
+      <nav class="header-links" aria-label="Demo pages">
+        <a href="index.html">🔍 Search demo</a>
+        <a class="lab-link" href="benchmark.html" aria-current="page">📊 Clustering lab</a>
+      </nav>
+    </div>
+  </header>
+  <aside id="localFileHint" class="local-file-hint" hidden>
+    Open this benchmark through HTTP so it can load the data and measure downloads.
+    From the repository root, run <code>python3 code/src/run_comparisons.py --serve --port 8081</code>,
+    then <a href="http://127.0.0.1:8081/client_wiki/benchmark.html">open the local benchmark</a>.
+  </aside>
+  <script>if (location.protocol === 'file:') document.getElementById('localFileHint').hidden = false;</script>
+  <main class="lab-layout">
+    <aside class="panel controls" id="controls" aria-labelledby="settingsHeading">
+      <h2 id="settingsHeading">⚙️ Experiment settings</h2>
+      <fieldset class="control-group"><legend>Test queries</legend>
+      <label for="suiteUrl">Query noise</label>
+      <select id="suiteUrl" aria-describedby="noiseHint">
+        <option value="https://wiki-ann-benchmarks-20261017.pages.dev/noise-small/suite.json">Low (easier)</option>
+        <option value="https://wiki-ann-benchmarks-20261017.pages.dev/noise-medium/suite.json">Medium</option>
+        <option value="https://wiki-ann-benchmarks-20261017.pages.dev/noise-large/suite.json">High (harder)</option>
+      </select>
+      <p class="query-help" id="noiseHint">More noise makes each test query less similar to its original passage.</p>
+      <p class="fixture-info" id="fixtureInfo">Loading benchmark…</p>
+      <p class="query-help">Paper settings: 10,000 queries per configuration and source recovery@1.</p>
+      </fieldset>
+      <button class="btn btn-primary" id="runAll" type="button" disabled>Run all checks</button>
+      <p class="status" id="labStatus" role="status" aria-live="polite">Loading test queries…</p>
+      <progress id="labProgress" max="1" value="0" hidden aria-label="Benchmark progress"></progress>
+      <details><summary>What is measured?</summary>
+        <p id="metricDescription">Source recovery@1 is the fraction of noisy queries whose original passage is the first result. Even a full scan may miss the original if noise moves another passage closer.</p>
+        <p>Each test runs one pass over its queries, loading its centroids once before timing. Query latency includes routing, cluster transfer, decompression, decoding and scoring; centroid loading and embedding are excluded.</p>
+        <p>The compression accuracy check uses four probes and one pass, with caching allowed only for cluster files. Centroids bypass browser caching. It keeps cluster membership fixed and does not report query latency.</p>
+      </details>
+    </aside>
+    <div class="experiments" id="experiments" aria-busy="false">
+      <section class="panel experiment" aria-labelledby="countHeading">
+        <div class="experiment-heading"><div><span class="step">01</span><h2 id="countHeading">Cluster count</h2></div><button class="btn btn-secondary run-check" data-check="counts" disabled>Run check</button></div>
+        <p>Compare all three cluster counts at 1, 4 and 8 probes, using float16 centroids.</p>
+        <div class="table-scroll"><table><caption class="sr-only">Cluster count measurements</caption><thead><tr><th>Clusters</th><th>Probes</th><th>Vectors / cluster</th><th>Source recovery</th><th>Search mean / p95</th><th>Download / query</th></tr></thead><tbody id="countsRows"><tr class="empty"><td colspan="6">Run this check to measure the tradeoff.</td></tr></tbody></table></div>
+      </section>
+      <section class="panel experiment" aria-labelledby="probeHeading">
+        <div class="experiment-heading"><div><span class="step">02</span><h2 id="probeHeading">Clusters searched</h2></div><button class="btn btn-secondary run-check" data-check="probes" disabled>Run check</button></div>
+        <p>Compare 1, 2, 3, 4, 6, 8 and 10 probes at 16,384 clusters.</p>
+        <div class="table-scroll"><table><caption class="sr-only">Probe budget measurements</caption><thead><tr><th>Clusters probed</th><th>Candidates</th><th>Source recovery</th><th>Search mean / p95</th><th>Download / query</th></tr></thead><tbody id="probesRows"><tr class="empty"><td colspan="5">Run this check to measure the tradeoff.</td></tr></tbody></table></div>
+      </section>
+      <section class="panel experiment" aria-labelledby="codecHeading">
+        <div class="experiment-heading"><div><span class="step">03</span><h2 id="codecHeading">Centroid compression</h2></div><button class="btn btn-secondary run-check" data-check="codecs" disabled>Run check</button></div>
+        <p>Source recovery and centroid loading at 16,384 clusters and four probes. Cluster files may use browser caching; centroids bypass it.</p>
+        <div class="table-scroll"><table><caption class="sr-only">Centroid compression results</caption><thead><tr><th>Format</th><th>Probes</th><th>File size</th><th>Download</th><th>Decode</th><th>Source recovery</th></tr></thead><tbody id="codecsRows"><tr class="empty"><td colspan="6">Run this check to measure the tradeoff.</td></tr></tbody></table></div>
+        <p class="footnote">Query timings are omitted for this accuracy-only check.</p>
+      </section>
+      <p class="measurement-note" id="measurementNote">Queries and results are measured in your browser using the uploaded Wikipedia vectors.</p>
+      <p class="measurement-note">Passage text © Wikipedia contributors, under <a rel="license" href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>. Search result titles link to source articles and their contributor histories. Passages are extracted from archived articles. <a href="DATA-NOTICE.txt" download>Download the data notice</a>.</p>
+    </div>
+  </main>
+</body>
+</html>

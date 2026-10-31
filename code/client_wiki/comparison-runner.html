@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Paper comparisons · Wikipedia Semantic Search</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='.9em' font-size='56'%3E📊%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="assets/styles.css">
+  <script type="module" src="assets/comparisons.mjs"></script>
+</head>
+<body class="benchmark-page comparison-page">
+  <a class="skip-link" href="#runStatus">Skip to comparison progress</a>
+  <header class="site-header">
+    <a class="back-link" href="benchmark.html">← Clustering lab</a>
+    <h1>Paper comparisons</h1>
+    <p class="tagline">Small, medium and large query noise. Live browser measurements.</p>
+  </header>
+  <main class="runner-layout">
+    <section class="panel" aria-labelledby="progressHeading">
+      <h2 id="progressHeading">Experiment progress</h2>
+      <p id="runNetwork" class="measurement-note">Checking the measurement source…</p>
+      <p id="runStatus" class="status" role="status" aria-live="polite">Loading the prepared comparison run…</p>
+      <progress id="runProgress" max="1" value="0" aria-label="Completed comparison configurations"></progress>
+      <p id="runDetail">The tests start automatically. Keep this tab open until the run finishes.</p>
+      <p id="runMatrix"></p>
+      <p class="measurement-note">Every configuration runs one pass over its queries and is saved to disk. Latency sweeps bypass browser caching. Compression checks use 16,384 clusters and four probes, with one pass over the configured queries. Only cluster files may use browser caching; centroids bypass it. These checks report accuracy without query timing.</p>
+      <p class="measurement-note">Each configuration loads only its chosen centroid format once, before its queries. Latency results exclude centroid loading; centroid-load measurements are reported separately.</p>
+      <p id="runWarmup" class="measurement-note">Before measurements, an untimed warm-up fetches every cluster file and required centroid file, using up to 16 concurrent cluster downloads. Downloads allow one retry. CDN cache residency remains uncontrolled. Test order is unrestricted; all latency tests bypass browser caching, including 16k.</p>
+    </section>
+    <section class="panel" aria-labelledby="resultsHeading">
+      <h2 id="resultsHeading">Latest saved measurements</h2>
+      <div class="table-scroll">
+        <table>
+          <caption>Source recovery means the original indexed passage was returned in the top results.</caption>
+          <thead><tr><th>Noise</th><th>Centroids</th><th>Clusters</th><th>Probed</th><th>Recovery</th><th>Search mean / p95</th></tr></thead>
+          <tbody id="runRows"><tr><td colspan="6">Waiting for the first measurement.</td></tr></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
