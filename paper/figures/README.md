@@ -1,12 +1,13 @@
 # Paper figures
 
-From the repository root, run `python3 paper/figures/generate.py` with matplotlib and reportlab installed. The generator reads retained compact summaries and manifest size fields, checks their consistency, and regenerates the architecture, recovery-versus-bytes and probe plots, table rows, recovery intervals and derived LaTeX values. No corpus download is needed.
+From the repository root, run `python3 paper/figures/generate.py` with matplotlib and reportlab installed. The generator reads retained compact summaries and manifest size fields, checks their consistency, and regenerates the architecture, recovery-versus-time, recovery-versus-bytes and probe plots, table rows, recovery intervals and derived LaTeX values. No corpus download is needed.
 
 The paper uses:
 
 - `screenshots/search-desktop.jpg` and `screenshots/lab-desktop.jpg`: full-width desktop page frames captured on October 31, 2026 at 1440×1200 pixels, shown side by side without close-up crops. A temporary local copy of the deployed client used the unchanged public manifests and remote data, with capture-only 20px passage/control/table text, 26px panel/result headings, and desktop layout. Search shows the default ten-result plants/sunlight question with privacy/download notices. The lab shows a completed cluster-count illustration with ten sampled queries per configuration at noise magnitude 0.4. No result content or timings were inserted. The illustrative run and capture timings are separate from the retained 10,000-query paper measurements; capture styles were not applied to the application source or deployment.
 - `architecture.pdf`: startup and the five local-search steps, with selective static-file downloads.
-- `recovery-bytes.pdf`: source recovery versus mean compressed vector payload for all 13 retained FP16 count/probe settings at noise magnitude 0.4, with probe labels and 95% Wilson intervals. Each setting uses 10,000 queries; startup and result-text bytes are excluded.
+- `recovery-time.pdf`: the paper's Figure 4, showing source recovery versus mean observed retrieval time for all 17 retained FP16 count/probe settings at noise magnitude 0.4: three settings at 8k clusters and seven each at 16k and 32k. Labels mark probes; shading joins pointwise 95% Wilson recovery intervals, not timing variation. Each setting uses 10,000 queries. Retrieval covers routing, vector download, decompression, decoding and ranking; it excludes startup, embedding and result-text loading. Timings describe the measured desktop/CDN setup with uncontrolled throughput.
+- `recovery-bytes.pdf`: the companion plot of the same 17 settings against mean compressed vector payload. It includes the retained 16k probe settings 2, 3, 6 and 10, which were omitted from the earlier 13-point plot. It uses the same shaded recovery intervals; startup and result-text bytes are excluded. Payload measures transfer cost independently of connection speed.
 - `large-count-table.tex` and rows: the three four-probe count settings. The full nine-setting original count/probe matrix remains in `../results/retrieval-summary.csv`.
 - `large-compression-table.tex` and rows: all six centroid formats at 32k and four probes.
 
@@ -14,7 +15,7 @@ The older `screenshots/search-full.png` and `screenshots/lab-full.png` are histo
 
 The superseded October 30 desktop PNGs are archived locally and are not included in this repository.
 
-`probe-large.pdf` retains the earlier 32k FP16 probe sweep with median latency/interquartile band and source recovery with 95% Wilson intervals. It remains available as a supporting asset; the current Figure 4 uses `recovery-bytes.pdf`.
+`probe-large.pdf` retains the earlier 32k FP16 probe sweep with median latency/interquartile band and source recovery with shaded 95% Wilson intervals. It remains available as a supporting asset; the current Figure 4 uses `recovery-time.pdf`.
 
 `probe-32k-summary.csv` preserves timing quartiles. `../results/recovery-intervals.csv` and `review-derived.tex` are computed from retained exact counts. `cluster-distribution.json` records live-manifest provenance; its compressed size-field inputs reproduce the quantiles and conservative four-probe byte bound offline.
 

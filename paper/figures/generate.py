@@ -105,10 +105,8 @@ axes[1].plot(probes, [100 * float(r['source_recovery']) for r in probe_rows],
              color='#0072B2', marker='o', markersize=3)
 recovery = [float(r['source_recovery']) for r in probe_rows]
 bounds = [wilson(round(p * 10000), 10000) for p in recovery]
-axes[1].errorbar(probes, [100 * p for p in recovery],
-                 yerr=[[100 * (p - b[0]) for p, b in zip(recovery, bounds)],
-                       [100 * (b[1] - p) for p, b in zip(recovery, bounds)]],
-                 fmt='none', ecolor='#0072B2', capsize=2)
+axes[1].fill_between(probes, [100 * low for low, high in bounds],
+                     [100 * high for low, high in bounds], color='#0072B2', alpha=.2, linewidth=0)
 for axis in axes:
     axis.set_xticks(probes)
     axis.grid(axis="y", color="0.88", linewidth=.5)
@@ -124,40 +122,48 @@ count_rows = sorted((r for r in rows if r['noise'] == 'large' and 'counts' in r[
                     key=lambda r: (int(r['clusters']), int(r['probes'])))
 assert [(int(r['clusters']), int(r['probes'])) for r in count_rows] == [
     (c, n) for c in (8192, 16384, 32768) for n in (1, 4, 8)]
-tradeoff_rows = {(int(r['clusters']), int(r['probes'])): r for r in count_rows}
+tradeoff_source = [r for r in rows if r['noise'] == 'large' and r['codec'] == 'f16'
+                   and r['accuracy_only'] == 'False']
+tradeoff_rows = {(int(r['clusters']), int(r['probes'])): r for r in tradeoff_source}
+assert len(tradeoff_rows) == len(tradeoff_source) == 13
 for row in probe_rows:
     key = (32768, int(row['probes']))
     if key in tradeoff_rows:
         assert all(float(row[k]) == float(tradeoff_rows[key][k])
-                   for k in ('source_recovery', 'bytes_per_query'))
+                   for k in ('source_recovery', 'bytes_per_query', 'query_mean_ms', 'query_p95_ms'))
     tradeoff_rows[key] = row
-assert set(tradeoff_rows) == ({(c, p) for c in (8192, 16384) for p in (1, 4, 8)}
-                              | {(32768, p) for p in probes})
-assert all(r['codec'] == 'f16' and r['noise'] == 'large' and int(r['queries']) == 10000
+assert set(tradeoff_rows) == ({(8192, p) for p in (1, 4, 8)}
+                              | {(c, p) for c in (16384, 32768) for p in probes})
+assert all(r['codec'] == 'f16' and r['noise'] == 'large' and float(r['noise_level']) == .4
+           and r['accuracy_only'] == 'False' and int(r['queries']) == 10000
+           and 0 < float(r['query_mean_ms']) <= float(r['query_p95_ms'])
+           and float(r['bytes_per_query']) > 0
            for r in tradeoff_rows.values())
-fig, axis = plt.subplots(figsize=(3.4, 2.45), layout='constrained')
-for clusters, color, marker in [(8192, '#D55E00', 's'), (16384, '#009E73', '^'), (32768, '#0072B2', 'o')]:
-    selected = [tradeoff_rows[key] for key in sorted(tradeoff_rows) if key[0] == clusters]
-    payload = [float(r['bytes_per_query']) / 1e6 for r in selected]
-    recovery = [float(r['source_recovery']) for r in selected]
-    bounds = [wilson(round(p * 10000), 10000) for p in recovery]
-    axis.errorbar(payload, [100 * p for p in recovery],
-                  yerr=[[100 * (p - b[0]) for p, b in zip(recovery, bounds)],
-                        [100 * (b[1] - p) for p, b in zip(recovery, bounds)]],
-                  color=color, marker=marker, markersize=3.5, linewidth=.9, capsize=2,
-                  label=f'{clusters:,} clusters')
-    for x, p, row in zip(payload, recovery, selected):
-        offset = -13 if clusters == 16384 or row['probes'] == '1' else 9
-        axis.annotate(row['probes'], (x, 100 * p), xytext=(0, offset), textcoords='offset points',
-                      ha='center', fontsize=7, color=color)
-axis.set_xlabel('Mean vector payload (MB/query)')
-axis.set_ylabel('Source recovery@1 (%)')
-axis.set_ylim(80, 101.2)
-axis.set_xlim(left=0)
-axis.grid(axis='y', color='0.88', linewidth=.5)
-axis.legend(loc='lower right', fontsize=7, frameon=False)
-fig.savefig(OUT / 'recovery-bytes.pdf')
-plt.close(fig)
+for metric, scale, label, filename in [
+        ('query_mean_ms', 1, 'Mean retrieval time (ms/query)', 'recovery-time.pdf'),
+        ('bytes_per_query', 1e6, 'Mean vector payload (MB/query)', 'recovery-bytes.pdf')]:
+    fig, axis = plt.subplots(figsize=(3.4, 2.35), layout='constrained')
+    for clusters, color, marker in [(8192, '#D55E00', 's'), (16384, '#009E73', '^'), (32768, '#0072B2', 'o')]:
+        selected = [tradeoff_rows[key] for key in sorted(tradeoff_rows) if key[0] == clusters]
+        costs = [float(r[metric]) / scale for r in selected]
+        recovery = [float(r['source_recovery']) for r in selected]
+        bounds = [wilson(round(p * 10000), 10000) for p in recovery]
+        axis.fill_between(costs, [100 * low for low, high in bounds],
+                          [100 * high for low, high in bounds], color=color, alpha=.2, linewidth=0)
+        axis.plot(costs, [100 * p for p in recovery], color=color, marker=marker,
+                  markersize=3.5, linewidth=.9, label=f'{clusters:,} clusters')
+        for x, p, row in zip(costs, recovery, selected):
+            offset = -13 if clusters == 16384 or row['probes'] == '1' else 9
+            axis.annotate(row['probes'], (x, 100 * p), xytext=(0, offset), textcoords='offset points',
+                          ha='center', fontsize=7, color=color)
+    axis.set_xlabel(label)
+    axis.set_ylabel('Source recovery@1 (%)')
+    axis.set_ylim(80, 101.2)
+    axis.set_xlim(left=0)
+    axis.grid(axis='y', color='0.88', linewidth=.5)
+    axis.legend(loc='lower right', fontsize=7, frameon=False)
+    fig.savefig(OUT / filename)
+    plt.close(fig)
 lines = []
 for i, row in enumerate(r for r in count_rows if r['probes'] == '4'):
     if i % 2:
@@ -275,4 +281,4 @@ c.setFont("Helvetica", 6.8)
 c.drawString(7, 7, "Reuse the model and centroids across queries.")
 c.showPage()
 c.save()
-print("Generated compact tables, probe and recovery--bytes plots, and architecture PDF.")
+print("Generated compact tables, probe, recovery--time and recovery--bytes plots, and architecture PDF.")
