@@ -17,6 +17,12 @@ function validateConfig(config) {
     'Invalid recorded seed.');
   requireValue(config.results_url === '/api/results', 'Invalid results destination.');
   requireValue(typeof config.centroid_only === 'boolean', 'Invalid centroid-only setting.');
+  if (config.only_8k_probes !== undefined) {
+    requireValue(!config.centroid_only && Array.isArray(config.only_8k_probes) && config.only_8k_probes.length > 0
+      && new Set(config.only_8k_probes).size === config.only_8k_probes.length
+      && config.only_8k_probes.every(probes => PAPER_SETTINGS.cluster_probe_counts_8k.includes(probes)),
+    'Use distinct 8k probe counts from 2, 3, 4 and 5.');
+  }
   requireValue(config.network_mode === 'internet', 'Comparison runs require Internet measurements.');
   requireValue(config.fixture_ids && config.suites.every(item =>
     typeof config.fixture_ids[item.label] === 'string' && config.fixture_ids[item.label].length > 0),
@@ -34,7 +40,9 @@ function validateConfig(config) {
 }
 
 function buildPlan(config) {
-  const values = config.suites.flatMap(noise => paperPlan().map(item => ({ ...item, noise_label: noise.label })));
+  const values = config.suites.flatMap(noise => paperPlan().map(item => ({ ...item, noise_label: noise.label })))
+    .filter(item => config.only_8k_probes === undefined || (item.noise_label === 'large' && item.clusters === 8192
+      && item.codec === 'f16' && !item.accuracy_only && config.only_8k_probes.includes(item.probes)));
   let state = config.seed >>> 0;
   // Randomize configuration order so connection drift is not tied to one method or noise level.
   for (let i = values.length - 1; i > 0; i--) {
@@ -88,6 +96,7 @@ async function run() {
     const suites = new Map();
     let reference;
     for (const item of config.suites) {
+      if (config.only_8k_probes !== undefined && item.label !== 'large') continue;
       status(`Loading ${item.label} noise queries…`);
       const suite = await loadSuite(new URL(item.url, configUrl), network);
       requireValue(suite.id === config.fixture_ids[item.label],
@@ -104,6 +113,7 @@ async function run() {
     const indexes = new Map();
     for (const suite of suites.values()) {
       for (const descriptor of suite.indexes) {
+        if (!plan.some(item => item.clusters === descriptor.clusters)) continue;
         if (!indexes.has(descriptor.url)) indexes.set(descriptor.url, await loadIndex(descriptor.url, network));
         const index = indexes.get(descriptor.url);
         requireValue(index.clusters === descriptor.clusters, 'A prepared index does not match its suite.');
@@ -138,7 +148,9 @@ async function run() {
       return;
     }
     $('runProgress').max = plan.length;
-    $('runMatrix').textContent = `${config.suites.map(item => `${item.label}: ${item.noise}`).join(' · ')} noise magnitude. `
+    $('runMatrix').textContent = config.only_8k_probes !== undefined
+      ? `8,192 clusters · FP16 · noise 0.4 · ${config.only_8k_probes.join(', ')} probes · ${config.query_count} queries each.`
+      : `${config.suites.map(item => `${item.label}: ${item.noise}`).join(' · ')} noise magnitude. `
       + `8,192 clusters at ${config.cluster_probe_counts_8k.join(', ')} probes; `
       + `other cluster counts at ${config.cluster_probe_counts.join(', ')} probes; `
       + `probe sweeps at ${config.probe_cluster_counts.join(', ')} clusters; ${Object.keys(CODEC_LABELS).length} centroid formats. `

@@ -132,13 +132,19 @@ def configure_network(suites: list[dict], hosting_manifest: Path, data: Path) ->
             "hosting_manifest_url": urljoin(base, "routing.json")}
 
 
-def comparison_plan() -> dict[tuple[str, int, int, str, bool], list[str]]:
-    """The configured latency and accuracy cases across all noise levels."""
+def comparison_plan(config: dict | None = None) -> dict[tuple[str, int, int, str, bool], list[str]]:
+    """Build the full comparison plan or the requested 8k supplement."""
     plan = {}
-    memberships = comparison_memberships()
+    memberships = comparison_memberships(config)
+    only_8k_probes = config.get("only_8k_probes") if config else None
     for label in NOISE_LABELS:
+        if only_8k_probes is not None and label != "large":
+            continue
         for name, configurations in memberships.items():
             for key in sorted(configurations):
+                if only_8k_probes is not None and (key[0] != 8192 or key[1] not in only_8k_probes
+                                                  or key[2:] != ("f16", False)):
+                    continue
                 plan.setdefault((label, *key), []).append(name)
     return plan
 
@@ -147,7 +153,7 @@ class ResultStore:
     def __init__(self, output, config, fixtures, data):
         self.output, self.config = Path(output), config
         self.data = Path(data)
-        self.expected = comparison_plan()
+        self.expected = comparison_plan(config)
         self.seen = set()
         self.lock, self.done = threading.Lock(), threading.Event()
         self.report = {"version": 1, "config": {k: v for k, v in config.items() if k != "token"},
@@ -244,7 +250,7 @@ class ResultStore:
         if len({setup["centroid_setup_id"] for setup in setups}) != len(expected):
             raise ValueError("Different centroid files must have distinct setup identities")
         warmup = packet.get("warmup")
-        warmed_counts = [] if self.config["centroid_only"] else list(CLUSTER_COUNTS)
+        warmed_counts = [] if self.config["centroid_only"] else sorted({key[1] for key in self.expected})
         if (not isinstance(warmup, list) or len(warmup) != len(warmed_counts)
                 or any(not isinstance(item, dict) or type(item.get("clusters")) is not int for item in warmup)
                 or {item.get("clusters") for item in warmup} != set(warmed_counts)):
@@ -444,7 +450,11 @@ def main() -> None:
     parser.add_argument("--cloudflare-project", help="build and upload the paper indexes, then measure them")
     parser.add_argument("--no-browser", action="store_true", help="print the control URL without opening it")
     parser.add_argument("--centroid-only", action="store_true", help="only measure the eight centroid files, 1,000 trials each")
+    parser.add_argument("--8k-probes", dest="only_8k_probes", type=int, nargs="+", choices=(2, 3, 4, 5),
+                        help="only measure these 8k FP16 probes at large noise (0.4), using the original preparation")
     args = parser.parse_args()
+    if args.only_8k_probes is not None and (args.serve or args.prepare_only or args.cloudflare_project or args.centroid_only):
+        parser.error("--8k-probes requires an existing preparation and hosting manifest; omit other modes")
     if args.serve:
         with ThreadingHTTPServer(("127.0.0.1", args.port), ComparisonHandler) as server:
             server.daemon_threads = True
@@ -487,6 +497,8 @@ def main() -> None:
         "centroid_setup_repeats": 1000, "centroid_only": args.centroid_only,
         "seed": suites[0]["seed"], "results_url": "/api/results",
     }
+    if args.only_8k_probes is not None:
+        config["only_8k_probes"] = sorted(set(args.only_8k_probes))
     output.mkdir(parents=True, exist_ok=True)
     if args.prepare_only:
         metadata = {"version": 1, "count": CORPUS_COUNT, "dimensions": 384,
@@ -521,6 +533,9 @@ def main() -> None:
             return
     if not store.report["complete"]:
         raise RuntimeError(store.report.get("error", "The browser did not complete the comparison matrix"))
+    if args.only_8k_probes is not None:
+        print(f"Saved 8k-only results.json, summary.csv and centroid-summary.csv in {output}", flush=True)
+        return
     from figures import export_figures
 
     export_figures(store.report, output / "figures")

@@ -299,6 +299,9 @@ def _write_centroid_tables(directory, report):
 
 def export_figures(report: dict, output: Path) -> Path:
     """Export the paper tables and probe graph from either completed report type."""
+    if (isinstance(report, dict) and isinstance(report.get("config"), dict)
+            and report["config"].get("only_8k_probes") is not None):
+        raise ValueError("8k-only runs provide summary.csv; full-matrix figures require a complete comparison run")
     centroid_only = (isinstance(report, dict) and isinstance(report.get("config"), dict)
                      and report["config"].get("centroid_only"))
     if centroid_only:

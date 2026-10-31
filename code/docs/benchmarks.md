@@ -25,6 +25,18 @@ The defaults use all 35,167,920 passages, 10,000 query sources per noise level, 
 
 The revised 8k sweep is configured for future runs only; its new measurements have not been collected. Existing summaries retain their recorded settings. New reports record `cluster_probe_counts_8k`; the exporter continues to accept historical reports without that field.
 
+To measure only the missing 8k points for the paper's high-noise plot, reuse the original preparation:
+
+```sh
+python3 code/src/run_comparisons.py \
+  --prepared-data /path/to/original/prepared \
+  --hosting-manifest /path/to/original/hosting.json \
+  --8k-probes 2 3 5 \
+  --output code/data/benchmark/8k-p235-new
+```
+
+`--8k-probes` runs only FP16 at 8,192 clusters and noise magnitude 0.4, with all 10,000 original queries per setting. It warms only the 8k index, measures its FP16 centroid setup, and saves `results.json`, `summary.csv` and `centroid-summary.csv` in a new directory. It skips 16k/32k, other noise levels and the full-matrix figure export. Use the retained four-probe result from the same preparation when combining summaries; add `4` to the flag only if you want to measure it again. This checkout excludes the original prepared data and hosting manifest, so substitute their actual paths.
+
 Shared latency settings run once. The fixed matrix contains 42 latency configurations and 18 accuracy checks: 600,000 searches in total. The corpus, query count, probe sweeps, noise levels, formats and source recovery@1 are fixed by the runner.
 
 Queries are normalized source-passage vectors plus Gaussian noise of L2 length 0.05, 0.15 or 0.4, then normalized again. All levels share source passages, random vectors and trained indexes. The original passage remains indexed. Source recovery@1 is the fraction of queries returning their source passage first; this tests robustness to perturbations rather than relevance to natural-language questions.
