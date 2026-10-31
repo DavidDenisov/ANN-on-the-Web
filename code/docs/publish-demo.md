@@ -82,6 +82,6 @@ Keep metadata and its upload package on the same filesystem. Packaging uses hard
 
 ## After publication
 
-Check the default search and ten result texts, then the lab. Metadata requests should use `brotli-batch-*` hosts with `.bin.br` filenames and `Content-Encoding: br`. Vector requests should retain their benchmark hosts. Local source edits are not automatically deployed.
+Check the default search and ten result texts, including the privacy and startup/download notices beside the query controls. In the lab, check the download warning, the default of 10 queries, the sample counts in results, and Cancel run. Metadata requests should use `brotli-batch-*` hosts with `.bin.br` filenames and `Content-Encoding: br`. Vector requests should retain their benchmark hosts. Local source edits are not automatically deployed.
 
 For multithreaded inference, check that `crossOriginIsolated` is `true` in both the page and embedding worker. The worker's configured `env.backends.onnx.wasm.numThreads` starts at zero (automatic) and resolves to the runtime's device-dependent count. A capable desktop should create additional ONNX worker threads; non-isolated hosting falls back to one thread.

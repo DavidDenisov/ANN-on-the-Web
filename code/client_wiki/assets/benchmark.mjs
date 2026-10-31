@@ -185,24 +185,30 @@ export async function warmIndexAssets(index, codecs, { onProgress, ...options } 
  * @param {import('./retrieval.mjs').Index} index
  * @param {LoadedSuite} suite
  * @param {Omit<import('./retrieval.mjs').NetworkOptions, 'cache'> & {codec?: import('./retrieval.mjs').Codec,
- *   probes?: number, accuracyOnly?: boolean,
+ *   probes?: number, accuracyOnly?: boolean, queryIndices?: number[],
  *   onProgress?: (progress: {completed: number, total: number, repeat: number, query: number}) => void,
  *   centroidSetup?: import('./retrieval.mjs').CentroidSetup}} [options]
  * @returns {Promise<BenchmarkResult>}
  */
 export async function benchmark(index, suite, {
   codec = 'f16', probes = 4,
-  accuracyOnly = false, onProgress,
+  accuracyOnly = false, onProgress, queryIndices,
   networkMode, assetsBaseUrl, assetsBaseUrls, signal, centroidSetup,
 } = {}) {
-  const k = 1, queryCount = 10000;
+  const k = 1;
   const policy = networkPolicy({ networkMode, assetsBaseUrl, assetsBaseUrls, signal, cache: accuracyOnly ? 'force-cache' : 'no-store' });
   requireValue(typeof accuracyOnly === 'boolean', 'Invalid accuracy-only setting.');
   requireValue(index.dimensions === suite.dimensions && index.count === suite.count, 'Suite and index do not match.');
   requireValue(suite.metric === 'source-recovery' && suite.truth_k === 1, 'Invalid benchmark metric.');
   requireValue([...paperPlan(), ...remaining32kPlan()].some(item => item.clusters === index.clusters && item.probes === probes
     && item.codec === codec && item.accuracy_only === accuracyOnly)
-    && suite.query_count === queryCount, 'Use a reported paper configuration.');
+    && suite.query_count === PAPER_SETTINGS.query_count, 'Use a reported paper configuration.');
+  if (queryIndices === undefined) queryIndices = Array.from({ length: suite.query_count }, (_, index) => index);
+  requireValue(Array.isArray(queryIndices) && queryIndices.length > 0 && queryIndices.length <= suite.query_count
+    && !queryIndices.includes(undefined)
+    && queryIndices.every(index => integer(index, 0) && index < suite.query_count)
+    && new Set(queryIndices).size === queryIndices.length, 'Use distinct query indices from the prepared suite.');
+  const queryCount = queryIndices.length;
   // Load once per configuration, outside query timers.
   const loaded = await loadCentroids(index, codec, { ...policy, cache: 'no-store' });
   requireValue(!centroidSetup || (centroidSetup.centroidTrials?.[0]?.requested_url === loaded.requestedUrl
@@ -212,14 +218,14 @@ export async function benchmark(index, suite, {
   const trials = [];
   const centroidTrials = centroidSetup?.centroidTrials ?? loaded.setupTrials;
   performance.setResourceTimingBufferSize?.(probes * 3 + 16);
-  for (let queryIndex = 0; queryIndex < queryCount; queryIndex++) {
+  for (const queryIndex of queryIndices) {
     const query = suite.queriesData.subarray(queryIndex * suite.dimensions, (queryIndex + 1) * suite.dimensions);
     const targetId = suite.truthData[queryIndex];
     performance.clearResourceTimings?.();
     const { results, selectedClusters: selected, candidates, queryMs, bytes, downloads } = await searchVectors(index, query,
       { centroids: loaded.centroids, probes, k, accuracyOnly, ...policy }).catch(error => {
         policy.signal?.throwIfAborted();
-        throw new Error(`Query ${queryIndex + 1}/${queryCount}: ${error.message}`, { cause: error });
+        throw new Error(`Query ${trials.length + 1}/${queryCount}: ${error.message}`, { cause: error });
       });
     const resultIds = results.map(item => item.id);
     const recall = resultIds[0] === targetId ? 1 : 0;
@@ -233,6 +239,7 @@ export async function benchmark(index, suite, {
     onProgress?.({ completed: trials.length, total: queryCount, repeat: 0, query: queryIndex });
     await new Promise(resolve => setTimeout(resolve, 0));
   }
+  policy.signal?.throwIfAborted();
   const recall = mean(trials.map(trial => trial.recall));
   return { codec, metric: 'source-recovery', network_mode: networkMode, ...(suite.id ? { fixture_id: suite.id } : {}),
     ...(networkMode === 'internet' ? { asset_base_url: assetsBaseUrl, asset_base_urls: policy.assetsBaseUrls } : {}),

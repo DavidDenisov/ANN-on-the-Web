@@ -6,6 +6,7 @@ const results = { counts: [], probes: [], codecs: [] };
 let suite;
 let indexes = [];
 let busy = false;
+let controller;
 
 const percent = value => `${(100 * value).toFixed(1)}%`;
 const ms = value => `${value.toFixed(2)} ms`;
@@ -20,6 +21,8 @@ function setBusy(value) {
   document.querySelectorAll('input, select, button').forEach(element => {
     element.disabled = value || (!suite && element.id !== 'suiteUrl');
   });
+  $('cancelRun').hidden = !controller;
+  $('cancelRun').disabled = !controller;
   $('experiments').setAttribute('aria-busy', String(value));
   $('labProgress').hidden = !value;
 }
@@ -54,11 +57,12 @@ function render(check, emptyMessage = 'Ready to measure.') {
     return Object.keys(codecNames).indexOf(a.codec) - Object.keys(codecNames).indexOf(b.codec) || a.probes - b.probes;
   });
   const values = rows.map(row => {
+    const recovery = `${percent(row.recall)} (${row.queries.toLocaleString('en-US')} ${row.queries === 1 ? 'query' : 'queries'})`;
     if (check === 'codecs') {
       return [codecNames[row.codec], row.probes, bytes(row.centroidBytes), ms(row.centroidDownloadMs.mean),
-        ms(row.centroidDecodeMs.mean), percent(row.recall)];
+        ms(row.centroidDecodeMs.mean), recovery];
     }
-    const measured = [percent(row.recall), `${row.queryMs.mean.toFixed(2)} / ${row.queryMs.p95.toFixed(2)} ms`,
+    const measured = [recovery, `${row.queryMs.mean.toFixed(2)} / ${row.queryMs.p95.toFixed(2)} ms`,
       bytes(row.bytesPerQuery)];
     if (check === 'counts') {
       return [row.clusters, row.probes, Math.round(suite.count / row.clusters).toLocaleString(), ...measured];
@@ -98,8 +102,20 @@ async function loadFixture() {
 }
 
 async function runChecks(checks) {
-  if (busy || !suite) return;
+  if (busy || !suite || !$('queryCount').reportValidity()) return;
+  const queryCount = $('queryCount').valueAsNumber;
+  const runController = new AbortController();
+  controller = runController;
   try {
+    let queryIndices;
+    if (queryCount < suite.query_count) {
+      queryIndices = Array.from({ length: suite.query_count }, (_, index) => index);
+      for (let i = queryIndices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [queryIndices[i], queryIndices[j]] = [queryIndices[j], queryIndices[i]];
+      }
+      queryIndices.length = queryCount;
+    }
     const plan = paperPlan().map(item => ({ ...item,
       memberships: item.memberships.filter(check => checks.includes(check)),
     })).filter(item => item.memberships.length);
@@ -121,6 +137,7 @@ async function runChecks(checks) {
       const label = `${index.clusters} clusters · ${probes} probed · ${codecNames[codec]}`;
       status(`${position + 1}/${plan.length}: ${label}`);
       const result = await benchmark(index, suite, { codec, probes, accuracyOnly: accuracy_only,
+        queryIndices, signal: runController.signal,
         onProgress: ({ completed, total }) => {
           $('labProgress').value = position + completed / total;
           status(`${position + 1}/${plan.length}: ${label} · ${completed}/${total} queries`);
@@ -133,16 +150,20 @@ async function runChecks(checks) {
       }
       $('labProgress').value = position + 1;
     }
-    status('Measurements complete.');
+    status(`Measurements complete. Queries per configuration: ${queryCount.toLocaleString('en-US')}.`);
   } catch (error) {
-    status(error.message, true);
+    const canceled = runController.signal.aborted;
+    status(canceled ? 'Run canceled. Completed configurations remain visible.' : error.message, !canceled);
+    for (const check of checks) render(check, canceled ? 'Run canceled.' : 'Run stopped.');
   } finally {
+    controller = undefined;
     setBusy(false);
   }
 }
 
 $('suiteUrl').addEventListener('change', loadFixture);
 $('runAll').addEventListener('click', () => runChecks(['counts', 'probes', 'codecs']));
+$('cancelRun').addEventListener('click', () => controller?.abort());
 document.querySelectorAll('.run-check').forEach(button => button.addEventListener('click', () => runChecks([button.dataset.check])));
 
 loadFixture();

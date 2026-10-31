@@ -3,11 +3,16 @@
 Semantic search over 35,167,920 Wikipedia passages using local query embedding and ranking with selective downloads from static hosting.
 
 - [Paper PDF](paper/main.pdf)
-- [Review follow-up](code/docs/review-follow-up.md)
 - [Search demo](https://wiki-ann-demo-20261022.pages.dev/client_wiki/)
 - [Clustering lab](https://wiki-ann-demo-20261022.pages.dev/client_wiki/benchmark.html)
 
 The default search uses 32,768 clusters, SQ6 centroids, four probes, and ten results.
+
+The search page automatically loads roughly 47 MB of model, runtime, and centroid asset bodies at the default settings; HTTP compression and caching can reduce network transfer. Query text and embeddings stay in the browser, while requested cluster/result-text files, IP addresses, and timing remain visible to the hosting provider. Search downloads depend on the question, settings, and cache.
+
+The lab defaults to 10 queries per configuration and accepts 1–10,000. Short runs shuffle the prepared query indices once, take the selected number, and reuse that subset across configurations. Result rows show their sample counts, and runs can be canceled. Small samples illustrate behavior; full paper measurements still use all 10,000 queries. Even short checks can transfer hundreds of MB; full checks can take hours and transfer hundreds of GB.
+
+The notices and short-run controls are deployed to the public demo. Update the [Cloudflare frontend](code/docs/publish-demo.md#frontend-update) to publish further changes; source publication alone does not deploy them.
 
 ## Repository layout
 
@@ -16,8 +21,7 @@ The default search uses 32,768 clusters, SQ6 centroids, four probes, and ten res
 - `paper/results/`: compact measurement summaries and LaTeX sample counts.
 - `code/client_wiki/`: search, clustering lab, and browser comparison runner.
 - `code/src/`: dataset preparation, clustering, publishing, and comparison scripts.
-- `code/benchmarks/`: browser measurements and the exact-neighbour scan.
-- `code/tests/`: CPU and browser-module regression tests.
+- `code/benchmarks/`: offline noise analysis and saved inference summaries.
 - `code/docs/`: [client](code/docs/client.md), [dataset](code/docs/dataset.md), [publishing](code/docs/publish-demo.md), and [benchmark](code/docs/benchmarks.md) guides.
 
 ## Build the paper
@@ -49,30 +53,12 @@ python3 code/src/run_comparisons.py --serve
 
 Open [local search](http://127.0.0.1:8080/client_wiki/) or [the lab](http://127.0.0.1:8080/client_wiki/benchmark.html). Use the public demo above when no local preparation is available.
 
-The [benchmark guide](code/docs/benchmarks.md) covers the full comparison, 32k supplement, and exact full-corpus neighbour scan. [Client measurement notes](code/docs/client-measurements.md) describe embedding, startup, compatibility, text-loading, and complete-query protocols. New runs require new output directories and preserve existing measurements.
+The [benchmark guide](code/docs/benchmarks.md) covers integrated browser comparisons, index preparation, publishing, and offline exports. [Client measurement notes](code/docs/client-measurements.md) preserve the historical embedding, startup, compatibility, text-loading, and complete-query protocols. Standalone live measurement runners have been removed.
 
-## Regression checks
-
-The JavaScript checks use Node.js and synthetic local fixtures:
-
-```sh
-node --test code/tests/*.test.cjs code/tests/*.test.mjs
-```
-
-With the Python dependencies and CPU or GPU Faiss installed:
-
-```sh
-python3 -m unittest discover -s code/tests -p 'test_*.py'
-```
-
-These checks cover centroid formats, vector ranking, metadata decoding/caching, cancellation, and local shard validation. They do not download the corpus or run the full measurements.
-
-Raw datasets, prepared indexes, model/browser caches, and full trial records belong under `code/data/` and are excluded from Git. Compact paper summaries remain in `paper/results/`. Compiled papers, caches, and local review-tool output are also excluded.
+This upload contains source code, documentation, required paper figures, and compact measurement summaries in `paper/results/`. Raw datasets, prepared indexes, model/browser caches, full trial records, build intermediates, and local review-tool output are not included. The current compiled paper is included at `paper/main.pdf`.
 
 The bundled Inter fonts include their [license](code/client_wiki/assets/fonts/OFL.txt). The ACM template retains its original notices and sources under `paper/`.
 
 ## Data attribution and hosting
 
-See [data attribution](DATA-NOTICE.md) for Wikipedia and embedding provenance. The public repository contains source, compact measurements and screenshots; it does not redistribute the full text or vector indexes. Live CDN availability is separate from source availability. The [publishing guide](code/docs/publish-demo.md#self-hosting-and-archival) describes preserving manifests and moving assets to object storage.
-
-The source includes new bandwidth and access-pattern notices; this GitHub publication does not deploy those HTML changes to the existing Cloudflare demo.
+See [data attribution](DATA-NOTICE.md) for Wikipedia and embedding provenance. The repository does not redistribute the full text or vector indexes. Live CDN availability is separate from source availability; the [publishing guide](code/docs/publish-demo.md) describes the existing hosting layout and frontend updates.

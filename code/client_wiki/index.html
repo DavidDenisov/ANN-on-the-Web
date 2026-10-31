@@ -15,7 +15,7 @@
     <div class="header-inner">
       <div class="header-copy">
         <h1>🔍 Wikipedia Semantic Search</h1>
-        <p class="tagline">Fully client-side. Your query stays with you.</p>
+        <p class="tagline">Query embedding and ranking run in your browser.</p>
         <p class="archive-description">Search 35.2 million Wikipedia passages by meaning.</p>
       </div>
       <nav class="header-links" aria-label="Demo pages">
@@ -31,6 +31,8 @@
           <h2 id="queryHeading">✍️ Find a passage</h2>
           <p class="panel-description">Describe what you’re looking for</p>
         </div>
+        <p class="query-help" id="privacyNotice">Query text and embeddings stay in this browser. The hosting provider can see requested cluster/result-text files, your IP address, and timing, which can reveal topics and likely results.</p>
+        <p class="query-help" id="downloadNotice">Startup automatically loads roughly 47 MB of assets at the default settings. Compression and caching can reduce transfer. Search downloads depend on the question, settings, and cache.</p>
         <div class="status loading" id="status" role="status" aria-live="polite">Loading search…</div>
         <progress id="progress" max="100" aria-label="Search progress" hidden></progress>
         <form id="searchForm">
@@ -79,7 +81,7 @@
       <h2 id="aboutHeading">About this search</h2>
       <p class="measurement-note">Passage text © Wikipedia contributors, under <a rel="license" href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>. Search result titles link to source articles and their contributor histories. Passages are extracted from archived articles. <a href="DATA-NOTICE.txt" download>Download the data notice</a>.</p>
       <p>Search the paper's full corpus of 35,167,920 Wikipedia passages using its uploaded vector clusters.</p>
-      <p><strong>Your query and embedding stay in this browser.</strong> The model and centroids load in a background worker when you open this page. Your browser retrieves the selected vector clusters and result text when you search.</p>
+      <p>Embedding and ranking run locally. File requests still reveal access patterns to the hosting provider; local computation does not hide which clusters or result-text batches you retrieve.</p>
       <details><summary>How search is measured</summary>
         <p>Results separate embedding time, centroid setup, vector retrieval and result-text loading. The model and centroids are reused for later searches; selected vector clusters are downloaded for each search. Decoded passage metadata stays in a limited memory cache until this page closes or reloads.</p>
       </details>
