@@ -25,6 +25,7 @@ import { CODEC_LABELS, CLUSTER_COUNTS, CLUSTER_FETCH_CONCURRENCY, networkPolicy,
 
 export const PAPER_SETTINGS = Object.freeze({
   cluster_counts: CLUSTER_COUNTS, cluster_probe_counts: [1, 4, 8],
+  cluster_probe_counts_8k: [2, 3, 4, 5],
   probe_cluster_counts: [16384], probe_counts: [1, 2, 3, 4, 6, 8, 10],
   quantization_clusters: 16384, quantization_probes: 4,
   codecs: /** @type {Codec[]} */ (Object.keys(CODEC_LABELS)), k: 1, query_count: 10000,
@@ -47,7 +48,8 @@ export function paperPlan() {
     entry.memberships.push(membership);
   }
   for (const clusters of PAPER_SETTINGS.cluster_counts) {
-    for (const probes of PAPER_SETTINGS.cluster_probe_counts) add(clusters, probes, 'f16', 'counts');
+    const probeCounts = clusters === 8192 ? PAPER_SETTINGS.cluster_probe_counts_8k : PAPER_SETTINGS.cluster_probe_counts;
+    for (const probes of probeCounts) add(clusters, probes, 'f16', 'counts');
   }
   for (const probes of PAPER_SETTINGS.probe_counts) add(16384, probes, 'f16', 'probes');
   for (const codec of PAPER_SETTINGS.codecs) add(16384, 4, codec, 'codecs');

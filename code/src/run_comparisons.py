@@ -133,7 +133,7 @@ def configure_network(suites: list[dict], hosting_manifest: Path, data: Path) ->
 
 
 def comparison_plan() -> dict[tuple[str, int, int, str, bool], list[str]]:
-    """The paper's 57 unique latency and accuracy configurations."""
+    """The configured latency and accuracy cases across all noise levels."""
     plan = {}
     memberships = comparison_memberships()
     for label in NOISE_LABELS:
@@ -506,7 +506,7 @@ def main() -> None:
     with ThreadingHTTPServer(("127.0.0.1", 0), partial(ComparisonHandler, store=store)) as server:
         server.timeout, server.daemon_threads = .5, True
         url = f"http://127.0.0.1:{server.server_port}/client_wiki/comparison-runner.html"
-        scope = "eight centroid files, 1,000 trials each" if args.centroid_only else "57 configurations, 10,000 queries each"
+        scope = "eight centroid files, 1,000 trials each" if args.centroid_only else f"{len(store.expected)} configurations, 10,000 queries each"
         print(f"Internet measurements: {scope}. Results: {output}\nOpen: {url}", flush=True)
         if not args.no_browser:
             webbrowser.open(url)

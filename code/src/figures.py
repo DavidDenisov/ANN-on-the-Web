@@ -95,6 +95,9 @@ def _centroid_timing_table(report, formats=False):
 
 def _paper_config(config):
     fixed = comparison_settings()
+    # Historical reports predate the revised 8k sweep.
+    if isinstance(config, dict) and "cluster_probe_counts_8k" not in config:
+        fixed.pop("cluster_probe_counts_8k")
     if not isinstance(config, dict) or any(config.get(key) != value for key, value in fixed.items()):
         raise ValueError("The report does not contain the paper's fixed experiment")
 
@@ -129,7 +132,7 @@ def _validated_comparison(report):
             or [suite.get("label") for suite in suites] != list(NOISE_LABELS)):
         raise ValueError("Expected small, medium and large noise suites")
     _paper_config(config)
-    expected = comparison_memberships()
+    expected = comparison_memberships(config)
     fixed = {key: positive_integer(config.get(value), value)
              for key, value in (("k", "k"), ("queries", "query_count"))}
     repeats = positive_integer(config.get("repeats"), "repeats")

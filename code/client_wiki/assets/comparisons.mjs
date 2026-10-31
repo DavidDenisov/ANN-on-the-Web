@@ -139,7 +139,8 @@ async function run() {
     }
     $('runProgress').max = plan.length;
     $('runMatrix').textContent = `${config.suites.map(item => `${item.label}: ${item.noise}`).join(' · ')} noise magnitude. `
-      + `${config.cluster_counts.length} cluster counts × ${config.cluster_probe_counts.join(', ')} probes; `
+      + `8,192 clusters at ${config.cluster_probe_counts_8k.join(', ')} probes; `
+      + `other cluster counts at ${config.cluster_probe_counts.join(', ')} probes; `
       + `probe sweeps at ${config.probe_cluster_counts.join(', ')} clusters; ${Object.keys(CODEC_LABELS).length} centroid formats. `
       + `${plan.filter(item => !item.accuracy_only).length} latency configurations × 1 pass; `
       + `${plan.filter(item => item.accuracy_only).length} cached accuracy checks × 1 pass. ${config.query_count} queries each. `

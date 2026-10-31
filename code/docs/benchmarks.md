@@ -19,11 +19,13 @@ Choose a new output directory for every run. Keep the browser tab active; the se
 
 The defaults use all 35,167,920 passages, 10,000 query sources per noise level, and source recovery@1:
 
-- Cluster counts: 8,192, 16,384 and 32,768, each at 1, 4 and 8 probes.
+- Cluster counts: 8,192 at 2, 3, 4 and 5 probes; 16,384 and 32,768 at 1, 4 and 8 probes.
 - Probe sweep: 1, 2, 3, 4, 6, 8 and 10 probes at 16,384 clusters.
 - Centroid formats: FP16, SQ8, SQ6, SQ4, symmetric INT8 and PQ4 at 16,384 clusters and four probes, measuring accuracy without query timing.
 
-Shared latency settings run once. The fixed matrix contains 39 latency configurations and 18 accuracy checks: 570,000 searches in total. The corpus, query count, probe sweeps, noise levels, formats and source recovery@1 are fixed to the paper.
+The revised 8k sweep is configured for future runs only; its new measurements have not been collected. Existing summaries retain their recorded settings. New reports record `cluster_probe_counts_8k`; the exporter continues to accept historical reports without that field.
+
+Shared latency settings run once. The fixed matrix contains 42 latency configurations and 18 accuracy checks: 600,000 searches in total. The corpus, query count, probe sweeps, noise levels, formats and source recovery@1 are fixed by the runner.
 
 Queries are normalized source-passage vectors plus Gaussian noise of L2 length 0.05, 0.15 or 0.4, then normalized again. All levels share source passages, random vectors and trained indexes. The original passage remains indexed. Source recovery@1 is the fraction of queries returning their source passage first; this tests robustness to perturbations rather than relevance to natural-language questions.
 

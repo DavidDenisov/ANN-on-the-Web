@@ -9,6 +9,7 @@ CLUSTER_COUNTS = (8192, 16384, 32768)
 DEMO_INDEX_PATHS = ((16384, "manifest.json"), (8192, "c8192/manifest.json"),
                     (32768, "c32768/manifest.json"))
 CLUSTER_PROBES = (1, 4, 8)
+CLUSTER_PROBES_8K = (2, 3, 4, 5)
 PROBE_CLUSTERS = (16384,)
 PROBE_COUNTS = (1, 2, 3, 4, 6, 8, 10)
 QUANTIZATION_CLUSTERS = 16384
@@ -22,14 +23,17 @@ NOISE_LABELS = ("small", "medium", "large")
 
 def comparison_settings() -> dict[str, object]:
     return {"cluster_counts": list(CLUSTER_COUNTS), "cluster_probe_counts": list(CLUSTER_PROBES),
+            "cluster_probe_counts_8k": list(CLUSTER_PROBES_8K),
             "probe_cluster_counts": list(PROBE_CLUSTERS), "probe_counts": list(PROBE_COUNTS),
             "quantization_clusters": QUANTIZATION_CLUSTERS, "quantization_probes": QUANTIZATION_PROBES,
             "codecs": list(CODECS), "k": 1, "query_count": QUERY_COUNT, "repeats": 1}
 
 
-def comparison_memberships() -> dict[str, set[tuple[int, int, str, bool]]]:
+def comparison_memberships(config: dict | None = None) -> dict[str, set[tuple[int, int, str, bool]]]:
+    probes_8k = CLUSTER_PROBES_8K if config is None else config.get("cluster_probe_counts_8k", CLUSTER_PROBES)
     return {
-        "counts": {(c, p, "f16", False) for c in CLUSTER_COUNTS for p in CLUSTER_PROBES},
+        "counts": {(c, p, "f16", False) for c in CLUSTER_COUNTS
+                   for p in (probes_8k if c == 8192 else CLUSTER_PROBES)},
         "probes": {(c, p, "f16", False) for c in PROBE_CLUSTERS for p in PROBE_COUNTS},
         "codecs": {(QUANTIZATION_CLUSTERS, QUANTIZATION_PROBES, codec, True) for codec in CODECS},
     }
