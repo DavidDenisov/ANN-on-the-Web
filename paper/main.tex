@@ -85,7 +85,7 @@ The supplied lab (Figure~\ref{fig:lab-demo}) offers noise presets and separate c
 \end{figure*}
 
 \paragraph{Public access.}
-The onsite setup is a laptop running Chromium with Internet access and WebAssembly, plus a poster QR code for visitors' browsers. If connectivity fails, saved screenshots and retained plots support a narrated walkthrough without live search. The supplied source includes the client, builders, figures, compact measurements, and self-hosting instructions. Live hosting depends on the CDN; preview URLs are not a permanent archive.
+The onsite setup is a laptop running Chromium with Internet access and WebAssembly, plus a poster QR code for visitors' browsers. If connectivity fails, saved screenshots and retained plots support a narrated walkthrough without live search. The supplied source includes the client, builders, figures, compact measurements, and self-hosting instructions.
 
 
 \section{Method outline}
@@ -154,7 +154,7 @@ At 32k/FP16, increasing from four to eight probes raises source recovery from $9
 \centering
 \includegraphics[width=\columnwidth]{recovery-time.pdf}
 \Description{Source recovery@1 in percent against mean observed retrieval time in milliseconds per query for 16,384 and 32,768 clusters with FP16 centroids and noise magnitude 0.4. Twelve configurations with at least two probes are shown: six each at 16k and 32k. The recovery axis spans 93.5--99.5 percent. Small markers and probe labels distinguish the curves. Shaded bands join pointwise 95 percent Wilson intervals for recovery, not timing variation. Retrieval excludes startup, embedding and result-text loading.}
-\caption{Recovery versus retrieval time, $\geq2$ probes (FP16, $\alpha=0.4$; $10{,}000$ queries/setting). Shading joins pointwise $95\%$ Wilson intervals; labels mark probes.}
+\caption{Recovery versus retrieval time (FP16, $\alpha=0.4$; $10{,}000$ queries/setting). Shading joins pointwise $95\%$ Wilson intervals; labels mark probes.}
 \label{fig:recovery-time}
 \end{figure}
 
