@@ -1,0 +1,2 @@
+clusters,codec,samples,centroid_bytes,download_mean_ms,download_p95_ms,decode_mean_ms,decode_p95_ms,centroid_setup_id
+8192,f16,1000,5810643,108.7891000000611,128.26500000059605,64.86136999995634,67.4349999986589,https://c8192-batch-0.wiki-ann-benchmarks-20261017.pages.dev/f16.bin.gz#b013c25a-6654-4daf-850c-788d95499c82

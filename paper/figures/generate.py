@@ -54,6 +54,17 @@ supplement_rows = read("results/32k-summary.csv")
 assert len(supplement_rows) == 12
 assert all(r['clusters'] == '32768' and r['noise'] == 'large'
            and int(r['queries']) == 10000 for r in supplement_rows)
+eight_k_rows = read('results/8k-summary.csv')
+assert sorted(int(row['probes']) for row in eight_k_rows) == [2, 3, 5]
+eight_k_setup, = read('results/8k-centroid-summary.csv')
+assert eight_k_setup['clusters'] == '8192' and eight_k_setup['codec'] == 'f16' and int(eight_k_setup['samples']) == 1000
+baseline_8k, = [row for row in rows if row['clusters'] == '8192' and row['probes'] == '4'
+                and row['noise'] == 'large' and row['codec'] == 'f16' and row['accuracy_only'] == 'False']
+assert all(row['clusters'] == '8192' and row['fixture_id'] == baseline_8k['fixture_id']
+           and row['centroid_setup_id'] == eight_k_setup['centroid_setup_id']
+           and row['centroid_bytes'] == eight_k_setup['centroid_bytes'] == baseline_8k['centroid_bytes']
+           and row['cluster_fetch_cache'] == 'no-store' and row['repeats'] == '1'
+           for row in eight_k_rows)
 setups = {(int(r["clusters"]), r["codec"]): r for r in
           read("results/centroid-summary.csv")}
 assert len(setups) == 8 and all(int(r["samples"]) == 1000 for r in setups.values())
@@ -132,7 +143,11 @@ for row in probe_rows:
         assert all(float(row[k]) == float(tradeoff_rows[key][k])
                    for k in ('source_recovery', 'bytes_per_query', 'query_mean_ms', 'query_p95_ms'))
     tradeoff_rows[key] = row
-assert set(tradeoff_rows) == ({(8192, p) for p in (1, 4, 8)}
+for row in eight_k_rows:
+    key = (8192, int(row['probes']))
+    assert key not in tradeoff_rows
+    tradeoff_rows[key] = row
+assert set(tradeoff_rows) == ({(8192, p) for p in (1, 2, 3, 4, 5, 8)}
                               | {(c, p) for c in (16384, 32768) for p in probes})
 assert all(r['codec'] == 'f16' and r['noise'] == 'large' and float(r['noise_level']) == .4
            and r['accuracy_only'] == 'False' and int(r['queries']) == 10000
@@ -143,10 +158,9 @@ for metric, scale, label, filename in [
         ('query_mean_ms', 1, 'Mean retrieval time (ms/query)', 'recovery-time.pdf'),
         ('bytes_per_query', 1e6, 'Mean vector payload (MB/query)', 'recovery-bytes.pdf')]:
     fig, axis = plt.subplots(figsize=(3.4, 2.35), layout='constrained')
-    # The 8k series is withheld from these plots pending a rerun.
-    for clusters, color, marker in [(16384, '#009E73', '^'), (32768, '#0072B2', 'o')]:
-        selected = [tradeoff_rows[key] for key in sorted(tradeoff_rows) if key[0] == clusters and key[1] >= 2]
-        assert [int(row['probes']) for row in selected] == [2, 3, 4, 6, 8, 10]
+    for clusters, color, marker in [(8192, '#D55E00', 's'), (16384, '#009E73', '^'), (32768, '#0072B2', 'o')]:
+        shown_probes = [2, 3, 4, 5] if clusters == 8192 else [2, 3, 4, 6, 8, 10]
+        selected = [tradeoff_rows[clusters, probes] for probes in shown_probes]
         costs = [float(r[metric]) / scale for r in selected]
         recovery = [float(r['source_recovery']) for r in selected]
         bounds = [wilson(round(p * 10000), 10000) for p in recovery]
@@ -155,7 +169,9 @@ for metric, scale, label, filename in [
         axis.plot(costs, [100 * p for p in recovery], color=color, marker=marker,
                   markersize=2, markeredgewidth=.35, linewidth=.8, label=f'{clusters:,} clusters')
         for x, p, row in zip(costs, recovery, selected):
-            offset = -9 if clusters == 16384 else 5
+            offset = -11 if clusters == 8192 else -9 if clusters == 16384 else 5
+            if clusters == 8192 and row['probes'] == '5':
+                offset = 7
             axis.annotate(row['probes'], (x, 100 * p), xytext=(0 if clusters == 32768 else 3, offset), textcoords='offset points',
                           ha='center', fontsize=6.5, color=color)
     axis.set_xlabel(label)

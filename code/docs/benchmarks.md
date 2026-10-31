@@ -23,16 +23,16 @@ The defaults use all 35,167,920 passages, 10,000 query sources per noise level, 
 - Probe sweep: 1, 2, 3, 4, 6, 8 and 10 probes at 16,384 clusters.
 - Centroid formats: FP16, SQ8, SQ6, SQ4, symmetric INT8 and PQ4 at 16,384 clusters and four probes, measuring accuracy without query timing.
 
-The revised 8k sweep is configured for future runs only; its new measurements have not been collected. Existing summaries retain their recorded settings. New reports record `cluster_probe_counts_8k`; the exporter continues to accept historical reports without that field.
+The large-noise 8k supplement has been completed at probes 2, 3 and 5; its four-probe point reuses the original measurement from the same preparation. Published summaries preserve both runs and their recorded settings. New reports record `cluster_probe_counts_8k`; the exporter continues to accept historical reports without that field.
 
-To measure only the missing 8k points for the paper's high-noise plot, reuse the original preparation:
+To repeat the 8k supplement for the paper's high-noise plot, reuse the original preparation and choose a new output directory:
 
 ```sh
 python3 code/src/run_comparisons.py \
   --prepared-data /path/to/original/prepared \
   --hosting-manifest /path/to/original/hosting.json \
   --8k-probes 2 3 5 \
-  --output code/data/benchmark/8k-p235-new
+  --output code/data/benchmark/8k-p235-repeat
 ```
 
 `--8k-probes` runs only FP16 at 8,192 clusters and noise magnitude 0.4, with all 10,000 original queries per setting. It warms only the 8k index, measures its FP16 centroid setup, and saves `results.json`, `summary.csv` and `centroid-summary.csv` in a new directory. It skips 16k/32k, other noise levels and the full-matrix figure export. Use the retained four-probe result from the same preparation when combining summaries; add `4` to the flag only if you want to measure it again. This checkout excludes the original prepared data and hosting manifest, so substitute their actual paths.

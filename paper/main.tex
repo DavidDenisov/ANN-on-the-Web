@@ -134,7 +134,7 @@ Experiments use Ubuntu~22.04 on an Intel Core i5-12400F PC with 32~GB RAM and a 
 \paragraph{Embedding compatibility.}
 Re-embedding $1{,}000$ uniformly sampled passages with the q8 browser encoder yields mean and 5th-percentile cosine similarities of $0.9924$ and $0.9892$ to the stored vectors; this passage check does not validate question retrieval.
 
-We compare cluster counts at four probes (Table~\ref{tab:latency-table}); the 16k/32k sweeps use 2, 3, 4, 6, 8, and 10 probes. At 32k and four probes, we compare FP16, SQ8/SQ6/SQ4, symmetric INT8~\cite{Faiss}, and PQ4 with 4-bit codes per eight-component block~\cite{product-quantization}. Cluster assignments and FP16 passage vectors stay fixed. Shared configurations run once.
+FP16 probe sweeps use 2--5 probes at 8k and 2, 3, 4, 6, 8, 10 at 16k/32k; the 8k four-probe point reuses the original measurement. At 32k and four probes, we compare FP16, SQ8/SQ6/SQ4, symmetric INT8~\cite{Faiss}, and PQ4 with 4-bit codes per eight-component block~\cite{product-quantization}. Cluster assignments and FP16 passage vectors stay fixed. Shared configurations run once.
 
 \paragraph{Hosting and timing.}
 Vector and text files are fetched before timing to prime the CDN cache; the fixed-question run uses $100$ preliminary searches. CDN residency and connections remain uncontrolled; cache bypass does not establish a cold CDN. Timed searches fetch up to ten clusters in parallel. Timed fetches bypass browser HTTP caching, and text loads also bypass the decoded-text cache; untimed accuracy checks allow cached cluster files.
@@ -149,11 +149,11 @@ With FP16 centroids, four probes recover over $98\%$ of source passages at all t
 
 \input{figures/large-count-table}
 
-At 32k/FP16, increasing from four to eight probes raises source recovery from $98.1\%$ to $98.8\%$, mean retrieval time from $135$ to $240$~ms, and vector payload from $3.98$ to $7.78$~MB. Figure~\ref{fig:recovery-time} compares recovery and observed retrieval time; a companion payload plot is supplied with the source.
+At 8k/FP16, increasing from two to five probes raises source recovery from $95.4\%$ to $98.7\%$, mean retrieval time from $204$ to $518$~ms, and vector payload from $6.88$ to $16.98$~MB. Figure~\ref{fig:recovery-time} compares recovery and observed retrieval time; a companion payload plot is supplied with the source.
 \begin{figure}[tb]
 \centering
 \includegraphics[width=\columnwidth]{recovery-time.pdf}
-\Description{Source recovery@1 in percent against mean observed retrieval time in milliseconds per query for 16,384 and 32,768 clusters with FP16 centroids and noise magnitude 0.4. Twelve configurations with at least two probes are shown: six each at 16k and 32k. The recovery axis spans 93.5--99.5 percent. Small markers and probe labels distinguish the curves. Shaded bands join pointwise 95 percent Wilson intervals for recovery, not timing variation. Retrieval excludes startup, embedding and result-text loading.}
+\Description{Source recovery@1 in percent against mean observed retrieval time in milliseconds per query for 8,192, 16,384 and 32,768 clusters with FP16 centroids and noise magnitude 0.4. Sixteen configurations are shown: probes 2, 3, 4 and 5 at 8k, and six settings each at 16k and 32k. The 8k four-probe measurement is retained from the original run. The recovery axis spans 93.5--99.5 percent. Small markers and probe labels distinguish the curves. Shaded bands join pointwise 95 percent Wilson intervals for recovery, not timing variation. Retrieval excludes startup, embedding and result-text loading.}
 \caption{Recovery versus retrieval time (FP16, $\alpha=0.4$; $10{,}000$ queries/setting). Shading joins pointwise $95\%$ Wilson intervals; labels mark probes.}
 \label{fig:recovery-time}
 \end{figure}
