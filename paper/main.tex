@@ -153,8 +153,8 @@ At 32k/FP16, increasing from four to eight probes raises source recovery from $9
 \begin{figure}[tb]
 \centering
 \includegraphics[width=\columnwidth]{recovery-time.pdf}
-\Description{Source recovery@1 in percent against mean observed retrieval time in milliseconds per query for 8,192, 16,384 and 32,768 clusters with FP16 centroids and noise magnitude 0.4. Seventeen configurations are plotted, including seven probe settings each at 16k and 32k. Labels mark probe counts; shaded bands join pointwise 95 percent Wilson intervals for recovery, not timing variation. Retrieval excludes startup, embedding and result-text loading.}
-\caption{Recovery versus mean retrieval time (FP16, $\alpha=0.4$; $10{,}000$ queries/setting). Labels mark probes; shading joins pointwise $95\%$ Wilson recovery intervals.}
+\Description{Source recovery@1 in percent against mean observed retrieval time in milliseconds per query for 16,384 and 32,768 clusters with FP16 centroids and noise magnitude 0.4. Twelve configurations with at least two probes are shown: six each at 16k and 32k. The one-probe results are omitted to focus on 93.5--99.5 percent recovery. Small markers and probe labels distinguish the curves. Shaded bands join pointwise 95 percent Wilson intervals for recovery, not timing variation. Retrieval excludes startup, embedding and result-text loading.}
+\caption{Recovery versus retrieval time, $\geq2$ probes (FP16, $\alpha=0.4$; $10{,}000$ queries/setting). Shading joins pointwise $95\%$ Wilson intervals; labels mark probes.}
 \label{fig:recovery-time}
 \end{figure}
 

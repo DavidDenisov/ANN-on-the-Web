@@ -143,25 +143,28 @@ for metric, scale, label, filename in [
         ('query_mean_ms', 1, 'Mean retrieval time (ms/query)', 'recovery-time.pdf'),
         ('bytes_per_query', 1e6, 'Mean vector payload (MB/query)', 'recovery-bytes.pdf')]:
     fig, axis = plt.subplots(figsize=(3.4, 2.35), layout='constrained')
-    for clusters, color, marker in [(8192, '#D55E00', 's'), (16384, '#009E73', '^'), (32768, '#0072B2', 'o')]:
-        selected = [tradeoff_rows[key] for key in sorted(tradeoff_rows) if key[0] == clusters]
+    # The 8k series is withheld from these plots pending a rerun.
+    for clusters, color, marker in [(16384, '#009E73', '^'), (32768, '#0072B2', 'o')]:
+        selected = [tradeoff_rows[key] for key in sorted(tradeoff_rows) if key[0] == clusters and key[1] >= 2]
+        assert [int(row['probes']) for row in selected] == [2, 3, 4, 6, 8, 10]
         costs = [float(r[metric]) / scale for r in selected]
         recovery = [float(r['source_recovery']) for r in selected]
         bounds = [wilson(round(p * 10000), 10000) for p in recovery]
         axis.fill_between(costs, [100 * low for low, high in bounds],
-                          [100 * high for low, high in bounds], color=color, alpha=.2, linewidth=0)
+                          [100 * high for low, high in bounds], color=color, alpha=.18, linewidth=0)
         axis.plot(costs, [100 * p for p in recovery], color=color, marker=marker,
-                  markersize=3.5, linewidth=.9, label=f'{clusters:,} clusters')
+                  markersize=2, markeredgewidth=.35, linewidth=.8, label=f'{clusters:,} clusters')
         for x, p, row in zip(costs, recovery, selected):
-            offset = -13 if clusters == 16384 or row['probes'] == '1' else 9
-            axis.annotate(row['probes'], (x, 100 * p), xytext=(0, offset), textcoords='offset points',
-                          ha='center', fontsize=7, color=color)
+            offset = -9 if clusters == 16384 else 5
+            axis.annotate(row['probes'], (x, 100 * p), xytext=(0 if clusters == 32768 else 3, offset), textcoords='offset points',
+                          ha='center', fontsize=6.5, color=color)
     axis.set_xlabel(label)
     axis.set_ylabel('Source recovery@1 (%)')
-    axis.set_ylim(80, 101.2)
+    axis.set_ylim(93.5, 99.5)
+    axis.set_yticks([94, 95, 96, 97, 98, 99])
     axis.set_xlim(left=0)
     axis.grid(axis='y', color='0.88', linewidth=.5)
-    axis.legend(loc='lower right', fontsize=7, frameon=False)
+    axis.legend(loc='lower right', fontsize=6.5, frameon=False)
     fig.savefig(OUT / filename)
     plt.close(fig)
 lines = []
