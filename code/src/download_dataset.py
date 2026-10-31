@@ -13,12 +13,12 @@ import pyarrow.parquet as pq
 from huggingface_hub import HfApi, hf_hub_download
 from tqdm import tqdm
 
+from paper_settings import DEFAULT_INPUT as DEFAULT_OUTPUT, DIMENSIONS
+
 
 DATASET = "maloyan/wikipedia-22-12-en-embeddings-all-MiniLM-L6-v2"
-DIMENSIONS = 384
 META_COLUMNS = ["id", "wiki_id", "paragraph_id", "title", "text"]
 BATCH_SIZE = 4096
-DEFAULT_OUTPUT = Path(__file__).resolve().parents[1] / "data" / "wikipedia"
 
 
 def validate_shard(directory: Path, source_name: str) -> int:
@@ -34,6 +34,19 @@ def validate_shard(directory: Path, source_name: str) -> int:
         if metadata.metadata.num_rows != rows or metadata.schema_arrow.names != META_COLUMNS:
             raise ValueError(f"Passage rows do not match vectors in {directory}")
     return rows
+
+
+def _float16_vectors(batch: pa.RecordBatch, source_name: str) -> np.ndarray:
+    values = np.asarray(batch.column("emb").to_pylist(), dtype=np.float32)
+    if values.shape != (batch.num_rows, DIMENSIONS):
+        raise ValueError(f"Expected {DIMENSIONS}-dimensional vectors in {source_name}")
+    if not np.isfinite(values).all() or not values.any(axis=1).all():
+        raise ValueError(f"Non-finite or zero vector in {source_name}")
+    with np.errstate(over="ignore", invalid="ignore"):
+        half = values.astype("<f2")
+    if not np.isfinite(half).all() or not half.any(axis=1).all():
+        raise ValueError(f"Vector cannot be represented in float16 in {source_name}")
+    return half
 
 
 def convert_shard(source: Path, destination: Path) -> int:
@@ -56,22 +69,13 @@ def convert_shard(source: Path, destination: Path) -> int:
             )
             try:
                 offset = 0
-                with pq.ParquetWriter(converted / "passages.parquet", schema, compression="zstd") as writer:
-                    with tqdm(total=rows, desc="Converting to float16", unit="passage", leave=False) as progress:
-                        for batch in parquet.iter_batches(batch_size=BATCH_SIZE, columns=META_COLUMNS + ["emb"]):
-                            values = np.asarray(batch.column("emb").to_pylist(), dtype=np.float32)
-                            if values.shape != (batch.num_rows, DIMENSIONS):
-                                raise ValueError(f"Expected {DIMENSIONS}-dimensional vectors in {source.name}")
-                            if not np.isfinite(values).all() or not values.any(axis=1).all():
-                                raise ValueError(f"Non-finite or zero vector in {source.name}")
-                            with np.errstate(over="ignore", invalid="ignore"):
-                                half = values.astype("<f2")
-                            if not np.isfinite(half).all() or not half.any(axis=1).all():
-                                raise ValueError(f"Vector cannot be represented in float16 in {source.name}")
-                            vectors[offset:offset + batch.num_rows] = half
-                            writer.write_table(pa.Table.from_batches([batch]).select(META_COLUMNS))
-                            offset += batch.num_rows
-                            progress.update(batch.num_rows)
+                with (pq.ParquetWriter(converted / "passages.parquet", schema, compression="zstd") as writer,
+                      tqdm(total=rows, desc="Converting to float16", unit="passage", leave=False) as progress):
+                    for batch in parquet.iter_batches(batch_size=BATCH_SIZE, columns=META_COLUMNS + ["emb"]):
+                        vectors[offset:offset + batch.num_rows] = _float16_vectors(batch, source.name)
+                        writer.write_table(pa.Table.from_batches([batch]).select(META_COLUMNS))
+                        offset += batch.num_rows
+                        progress.update(batch.num_rows)
                 if offset != rows:
                     raise ValueError(f"Incomplete conversion of {source.name}")
                 vectors.flush()

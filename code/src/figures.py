@@ -2,7 +2,6 @@
 
 import argparse
 import csv
-import ipaddress
 import json
 import math
 from pathlib import Path
@@ -10,8 +9,10 @@ import statistics
 from tempfile import TemporaryDirectory
 from urllib.parse import urlsplit, urlunsplit
 
+from measurement_validation import centroid_downloads, validate_centroid_samples, finite_number, is_public_host, positive_integer, validate_result
+from paper_settings import NOISE_LABELS, comparison_memberships, comparison_settings
+
 import matplotlib
-matplotlib.use("Agg")
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 from matplotlib.ticker import MaxNLocator
@@ -24,98 +25,6 @@ STYLE = {"font.family": "serif", "font.size": 9, "axes.labelsize": 9,
          "axes.linewidth": .7, "lines.linewidth": 1.25, "lines.markersize": 4,
          "figure.facecolor": "white", "axes.facecolor": "white", "savefig.facecolor": "white",
          "pdf.fonttype": 42, "mathtext.fontset": "dejavuserif"}
-
-
-def _integer(value, name):
-    if type(value) is not int or value < 1:
-        raise ValueError(f"{name} must be a positive integer")
-    return value
-
-
-def _number(value, name, minimum=0, maximum=None, positive=False):
-    if (type(value) not in (int, float) or not math.isfinite(value)
-            or value < minimum or (positive and value <= 0)
-            or (maximum is not None and value > maximum)):
-        raise ValueError(f"{name} must be finite and {'positive' if positive else 'in range'}")
-    return value
-
-
-def _centroid_samples(row):
-    setup_id = row.get("centroid_setup_id")
-    if not isinstance(setup_id, str) or not setup_id:
-        raise ValueError("Missing shared centroid setup identity")
-    repeats = _integer(row.get("centroid_setup_repeats"), "centroid_setup_repeats")
-    trials = row.get("centroidTrials")
-    if not isinstance(trials, list) or len(trials) != repeats:
-        raise ValueError("centroidTrials must match the shared setup sample count")
-    seen = set()
-    for trial in trials:
-        if not isinstance(trial, dict):
-            raise ValueError("Each centroid trial must be an object")
-        if (trial.get("setup_id") != setup_id or not isinstance(trial.get("requested_url"), str)
-                or not trial["requested_url"] or trial["requested_url"] != trials[0].get("requested_url")):
-            raise ValueError("Shared centroid setup identity does not match its download")
-        sample = trial.get("sample")
-        if type(sample) is not int or not 0 <= sample < repeats or sample in seen:
-            raise ValueError("Invalid or duplicate centroid setup sample")
-        seen.add(sample)
-        _number(trial.get("decodeMs"), "centroid decodeMs")
-        _number(trial.get("downloadMs"), "centroid downloadMs", positive=True)
-        _integer(trial.get("bytes"), "centroid bytes")
-    if len({trial["bytes"] for trial in trials}) != 1:
-        raise ValueError("Shared centroid samples must use the same payload size")
-    return {"centroidTrials": trials, "centroid_setup_id": setup_id, "centroid_setup_repeats": repeats}
-
-
-def _row(row):
-    if not isinstance(row, dict):
-        raise ValueError("Each result must be an object")
-    codec = row.get("codec")
-    if not isinstance(codec, str) or codec not in CODECS:
-        raise ValueError(f"Unsupported centroid codec: {codec!r}")
-    values = {key: _integer(row.get(key), key)
-              for key in ("clusters", "probes", "k", "queries", "repeats")}
-    accuracy_only = row.get("accuracy_only")
-    if type(accuracy_only) is not bool or values["repeats"] != 1:
-        raise ValueError("Measurements require one pass")
-    if row.get("cluster_fetch_cache") != ("force-cache" if accuracy_only else "no-store"):
-        raise ValueError("Result cache policy does not match its test")
-    if accuracy_only and any(key in row for key in ("queryMs", "routingMs", "clusterDownloadMs", "clusterDecodeMs", "scoringMs")):
-        raise ValueError("Accuracy-only checks must omit query timing")
-    if values["probes"] > values["clusters"]:
-        raise ValueError("probes cannot exceed clusters")
-    trials = row.get("trials")
-    if not isinstance(trials, list) or len(trials) != values["queries"] * values["repeats"]:
-        raise ValueError("trials must contain queries × repeats observations")
-    seen = set()
-    for trial in trials:
-        if not isinstance(trial, dict):
-            raise ValueError("Each query trial must be an object")
-        repeat, query = trial.get("repeat"), trial.get("query")
-        if (type(repeat) is not int or not 0 <= repeat < values["repeats"]
-                or type(query) is not int or not 0 <= query < values["queries"]
-                or (repeat, query) in seen):
-            raise ValueError("Invalid or duplicate query/repeat in trials")
-        seen.add((repeat, query))
-        _number(trial.get("recall"), "trial recall", maximum=1)
-        if accuracy_only:
-            if any(key in trial for key in ("queryMs", "routingMs", "downloadMs", "decodeMs", "scoringMs")):
-                raise ValueError("Accuracy-only trials must omit query timing")
-        else:
-            _number(trial.get("queryMs"), "queryMs", positive=True)
-    return {**values, "codec": codec, "metric": row.get("metric"), "accuracy_only": accuracy_only, "trials": trials,
-            **_centroid_samples(row)}
-
-
-def _centroid_downloads(rows):
-    shared = {}
-    for row in rows:
-        for trial in row["centroidTrials"]:
-            key = (row["centroid_setup_id"], trial["sample"])
-            if key in shared and shared[key] != trial:
-                raise ValueError("Conflicting measurements for a shared centroid setup")
-            shared[key] = trial
-    return list(shared.values())
 
 
 def _accuracy_value(trials):
@@ -172,11 +81,11 @@ def _centroid_timing_table(report, formats=False):
     pairs = ([(16384, codec) for codec in CODECS] if formats
              else [(clusters, "f16") for clusters in sorted(report["config"]["cluster_counts"])])
     for clusters, codec in pairs:
-        samples = _centroid_downloads([row for row in rows if row["clusters"] == clusters and row["codec"] == codec])
+        samples = centroid_downloads([row for row in rows if row["clusters"] == clusters and row["codec"] == codec])
         if not samples:
             raise ValueError(f"Missing centroid setup for {clusters} / {codec}")
         downloads = sorted(sample["downloadMs"] for sample in samples)
-        decodes = sorted(_number(sample.get("decodeMs"), "centroid decodeMs") for sample in samples)
+        decodes = sorted(finite_number(sample.get("decodeMs"), "centroid decodeMs") for sample in samples)
         p95 = math.ceil(len(samples) * .95) - 1
         cells.append([CODECS[codec] if formats else str(clusters), f"{samples[0]['bytes'] / 1e6:.2f}",
                       f"{statistics.mean(downloads):.0f} / {downloads[p95]:.0f}",
@@ -185,10 +94,7 @@ def _centroid_timing_table(report, formats=False):
 
 
 def _paper_config(config):
-    fixed = {"cluster_counts": [8192, 16384, 32768], "cluster_probe_counts": [1, 4, 8],
-             "probe_cluster_counts": [16384], "probe_counts": [1, 2, 3, 4, 6, 8, 10],
-             "quantization_clusters": 16384, "quantization_probes": 4,
-             "codecs": list(CODECS), "k": 1, "query_count": 10000, "repeats": 1}
+    fixed = comparison_settings()
     if not isinstance(config, dict) or any(config.get(key) != value for key, value in fixed.items()):
         raise ValueError("The report does not contain the paper's fixed experiment")
 
@@ -202,12 +108,7 @@ def _asset_base(value):
             raise ValueError("Asset base URL must be absolute without query or fragment")
         parsed.port
         host = (parsed.hostname or "").lower().rstrip(".")
-        try:
-            public = ipaddress.ip_address(host).is_global
-        except ValueError:
-            public = ("." in host and not host.replace(".", "").isdigit()
-                      and not host.endswith((".localhost", ".local", ".internal", ".test", ".invalid")))
-        if not public:
+        if not is_public_host(host):
             raise ValueError("Asset base URL must use a public HTTPS host")
         return urlunsplit((parsed.scheme.lower(), parsed.netloc.lower(), parsed.path.rstrip("/") + "/", "", ""))
     except ValueError as error:
@@ -225,27 +126,18 @@ def _validated_comparison(report):
     suites = config.get("suites")
     if (not isinstance(suites, list) or len(suites) != 3
             or any(not isinstance(suite, dict) for suite in suites)
-            or [suite.get("label") for suite in suites] != ["small", "medium", "large"]):
+            or [suite.get("label") for suite in suites] != list(NOISE_LABELS)):
         raise ValueError("Expected small, medium and large noise suites")
     _paper_config(config)
-    counts = config["cluster_counts"]
-    count_probes = config["cluster_probe_counts"]
-    probe_clusters = config["probe_cluster_counts"]
-    probes = config["probe_counts"]
-    codecs = config["codecs"]
-    expected = {
-        "counts": {(c, p, "f16", False) for c in counts for p in count_probes},
-        "probes": {(c, p, "f16", False) for c in probe_clusters for p in probes},
-        "codecs": {(16384, 4, codec, True) for codec in codecs},
-    }
-    fixed = {key: _integer(config.get(value), value)
+    expected = comparison_memberships()
+    fixed = {key: positive_integer(config.get(value), value)
              for key, value in (("k", "k"), ("queries", "query_count"))}
-    repeats = _integer(config.get("repeats"), "repeats")
+    repeats = positive_integer(config.get("repeats"), "repeats")
     grouped = {suite["label"]: {name: [] for name in expected} for suite in suites}
     levels = []
     first = None
     for suite in suites:
-        label, level = suite["label"], _number(suite.get("noise"), "noise")
+        label, level = suite["label"], finite_number(suite.get("noise"), "noise")
         levels.append(level)
         fixture = fixtures.get(label)
         if (not isinstance(fixture, dict) or fixture.get("metric") != "source-recovery"
@@ -273,7 +165,7 @@ def _validated_comparison(report):
             raise ValueError("Comparison measurements must use Internet downloads")
         if _asset_base(raw.get("asset_base_url")) != _asset_base(config.get("assets_base_url")):
             raise ValueError("Measurement asset host and path must match the run")
-        row = _row(measurement.get("result"))
+        row = validate_result(measurement.get("result"))
         if row.get("metric") != "source-recovery":
             raise ValueError("Comparison measurements must use source recovery")
         if (any(row[key] != value for key, value in fixed.items())
@@ -350,11 +242,19 @@ def _write_table(directory, name, result, caption):
         writer.writerows(cells)
     wide = name == "latency-table"
     inline = name == "centroid-counts-table"
-    environment = "minipage" if inline else ("table*" if wide else "table")
+    if inline:
+        environment = "minipage"
+        placement = r"[c]{0.43\textwidth}"
+    elif wide:
+        environment = "table*"
+        placement = "[tbp]"
+    else:
+        environment = "table"
+        placement = "[htbp]"
     columns = "|l|" + "c|" * (len(headers) - 1)
     padding = "3.5pt" if wide else "5pt"
     font = r"\normalsize" if wide else r"\normalsize\renewcommand{\arraystretch}{1.2}"
-    lines = [r"\begin{" + environment + "}" + (r"[c]{0.43\textwidth}" if inline else ("[tbp]" if wide else "[htbp]")),
+    lines = [r"\begin{" + environment + "}" + placement,
              r"\centering" + font + r"\setlength{\tabcolsep}{" + padding + "}",
              r"\arrayrulecolor{black!25}\setlength{\arrayrulewidth}{0.3pt}",
              (r"\captionof{table}{" if inline else r"\caption{") + caption + "}", r"\label{tab:" + name + "}",
@@ -394,7 +294,7 @@ def _write_centroid_tables(directory, report):
         + r"\newcommand{\BenchmarkCentroidSamples}{" + str(samples) + "}\n", encoding="utf-8")
 
 
-def export_figures(report: dict, output: Path):
+def export_figures(report: dict, output: Path) -> Path:
     """Export the paper tables and probe graph from either completed report type."""
     centroid_only = (isinstance(report, dict) and isinstance(report.get("config"), dict)
                      and report["config"].get("centroid_only"))
@@ -410,7 +310,7 @@ def export_figures(report: dict, output: Path):
         if len(setups) != len(expected) or {(row["clusters"], row["codec"]) for row in setups} != expected:
             raise ValueError("Incomplete centroid setups")
         for row in setups:
-            _centroid_samples(row)
+            validate_centroid_samples(row)
             if row["centroid_setup_repeats"] != report["config"]["centroid_setup_repeats"]:
                 raise ValueError("Centroid sample count does not match the run")
     else:
@@ -442,7 +342,7 @@ def export_figures(report: dict, output: Path):
     return output
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("report", type=Path, help="Completed paper comparison or centroid setup report")
     parser.add_argument("--output", type=Path, required=True, help="New directory for LaTeX/CSV tables and the probe graph PDF")

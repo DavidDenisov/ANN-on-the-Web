@@ -1,21 +1,42 @@
 """CPU checks for exported vector formats and downloaded shard validation."""
 
-import json
-import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 import numpy as np
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+from fixtures import write_json
+import cluster
 from cluster import centroid_payload, noisy_queries, pack_codes, prepare_vectors
 from download_dataset import DIMENSIONS, META_COLUMNS, validate_shard
 
 
 class PreparationChecks(unittest.TestCase):
+    def test_publishing_releases_generated_payloads_only_after_the_handoff(self):
+        original = {"shards": ["a.parquet"], "dataset": "fixture", "revision": "revision"}
+        shards = [{"name": "a.parquet", "offset": 0, "count": 4}]
+        def build(source, output, clusters, seed):
+            (output / "clusters").mkdir(parents=True)
+            (output / "clusters/payload").write_bytes(b"complete")
+        for publish in (False, True):
+            with self.subTest(publish=publish), TemporaryDirectory() as directory:
+                output = Path(directory) / "prepared"
+                handed_off = []
+                def handoff(staged, count):
+                    self.assertEqual((staged / f"c{count}/clusters/payload").read_bytes(), b"complete")
+                    handed_off.append(count)
+                with patch.object(cluster, "require_gpu"), patch.object(cluster, "load_shards", return_value=(original, shards, 4)), \
+                        patch.multiple(cluster, QUERY_COUNT=2, CLUSTER_COUNTS=(1,)), \
+                        patch.object(cluster, "copy_rows", side_effect=lambda shards, ids, target, description: target.fill(1)), \
+                        patch.object(cluster, "cluster_and_save", side_effect=build):
+                    cluster.build_comparison_data(Path(directory), output, publish_index=handoff if publish else None)
+                self.assertEqual((output / "c1/clusters/payload").exists(), not publish)
+                self.assertEqual(handed_off, [1] if publish else [])
+
     def test_normalization_preserves_input_and_rejects_invalid_vectors(self):
         raw = np.zeros((2, DIMENSIONS), dtype=np.float32)
         raw[:, :2] = [[3, 4], [0, 2]]
@@ -53,9 +74,9 @@ class PreparationChecks(unittest.TestCase):
             np.save(root / 'vectors.npy', np.ones((1, DIMENSIONS), dtype='<f2'))
             pq.write_table(pa.table({name: ['value'] for name in META_COLUMNS}), root / 'passages.parquet')
             info = root / 'info.json'
-            info.write_text(json.dumps({'source': 'shard.parquet', 'rows': 1}))
+            write_json(info, {'source': 'shard.parquet', 'rows': 1})
             self.assertEqual(validate_shard(root, 'shard.parquet'), 1)
-            info.write_text(json.dumps({'source': 'shard.parquet', 'rows': True}))
+            write_json(info, {'source': 'shard.parquet', 'rows': True})
             with self.assertRaises(ValueError):
                 validate_shard(root, 'shard.parquet')
 

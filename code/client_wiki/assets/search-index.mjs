@@ -1,18 +1,19 @@
 import { loadIndex, loadCentroids, searchVectors, fetchBytes, internetAssetUrl } from './retrieval.mjs';
 
 /**
- * @typedef {import('./retrieval.mjs').Index & {embedding_model: string, metadata: {
- *   format: string, count: number, batch_size: number, pattern: string,
- *   files_per_deployment: number, base_urls: string[]}}} SearchIndex
+ * @typedef {import('./retrieval.mjs').Index & {embedding_model: string,
+ *   metadata: import('./retrieval.mjs').PassageMetadata}} SearchIndex
  * @typedef {import('./retrieval.mjs').SearchMatch} SearchMatch
  * @typedef {{id: number, title: string|null, text: string|null, metadataUnavailable?: boolean}} Passage
- * @typedef {Omit<import('./retrieval.mjs').AssetDownload, 'buffer'> & {batch: number, decodeMs: number}} TextDownload
+ * @typedef {Omit<import('./retrieval.mjs').AssetDownload, 'buffer'|'requestedUrl'|'resolvedUrl'> &
+ *   {batch: number, decodeMs: number, requested_url: string, resolved_url: string}} TextDownload
  * @typedef {{codec?: import('./retrieval.mjs').Codec, probes?: number, k?: number,
  *   signal?: AbortSignal, cache?: 'force-cache'|'no-store',
  *   onProgress?: (progress: import('./retrieval.mjs').SearchProgress) => void}} SearchOptions
  * @typedef {{results: (Passage & SearchMatch)[], candidates: number, clusters: number, bytes: number,
  *   centroidMs: number, vectorMs: number, metadataMs: number, metadataUnavailable: boolean,
- *   vectorDownloads: import('./retrieval.mjs').VectorDownload[], textDownloads: TextDownload[], elapsedMs: number}} SearchResult
+ *   vectorDownloads: import('./retrieval.mjs').VectorDownload[], textDownloads: TextDownload[],
+ *   failures: {batch: number, message: string}[], elapsedMs: number}} SearchResult
  */
 
 const states = new WeakMap();
@@ -37,8 +38,9 @@ export async function loadSearchIndex(url, { signal } = {}) {
     throw new Error('Invalid passage metadata hosting map.');
   }
   for (const base of meta.base_urls) internetAssetUrl(base, base);
-  states.set(index, { centroids: new Map(), metadata: new Map(), metadataBytes: 0 });
-  return { index };
+  const searchIndex = /** @type {SearchIndex} */ (index);
+  states.set(searchIndex, { centroids: new Map(), metadata: new Map(), metadataBytes: 0 });
+  return { index: searchIndex };
 }
 
 /** @param {ArrayBuffer} buffer @param {number} first @param {number} count @returns {Passage[]} */
@@ -75,7 +77,7 @@ async function loadMetadata(index, batch, state, signal, cache) {
     state.metadata.set(url, cached);
     return { records: cached.records, download: null };
   }
-  const { buffer, ...downloaded } = await fetchBytes(url, { signal, cache });
+  const { buffer, requestedUrl, resolvedUrl, ...downloaded } = await fetchBytes(url, { signal, cache });
   signal?.throwIfAborted();
   const first = batch * index.metadata.batch_size;
   const count = Math.min(index.metadata.batch_size, index.metadata.count - first);
@@ -98,15 +100,16 @@ async function loadMetadata(index, batch, state, signal, cache) {
     state.metadata.set(url, { records, bytes });
     state.metadataBytes += bytes;
   }
-  return { records, download: { batch, ...downloaded, decodeMs } };
+  return { records, download: { batch, ...downloaded, requested_url: requestedUrl, resolved_url: resolvedUrl, decodeMs } };
 }
 
 /**
  * Failed batches retain ranked IDs with null title/text and metadataUnavailable=true.
+ * @template {{id: number}} T
  * @param {SearchIndex} index
- * @param {SearchMatch[]} results
+ * @param {T[]} results
  * @param {{signal?: AbortSignal, cache?: 'force-cache'|'no-store'}} [options]
- * @returns {Promise<{results: (Passage & SearchMatch)[], metadataMs: number, metadataUnavailable: boolean,
+ * @returns {Promise<{results: (Passage & Omit<T, 'title'|'text'|'metadataUnavailable'>)[], metadataMs: number, metadataUnavailable: boolean,
  *   downloads: TextDownload[], failures: {batch: number, message: string}[]}>}
  */
 export async function loadResultText(index, results, { signal, cache = 'force-cache' } = {}) {
@@ -119,7 +122,6 @@ export async function loadResultText(index, results, { signal, cache = 'force-ca
     throw new Error('Invalid result-text loading options.');
   }
   const metadata = new Map(), downloads = [], failures = [];
-  let metadataUnavailable = false;
   const batches = [...new Set(results.map(result => Math.floor(result.id / index.metadata.batch_size)))];
   let next = 0;
   await Promise.allSettled(Array.from({ length: Math.min(METADATA_FETCH_CONCURRENCY, batches.length) }, async () => {
@@ -133,16 +135,24 @@ export async function loadResultText(index, results, { signal, cache = 'force-ca
       } catch (error) {
         signal?.throwIfAborted();
         failures.push({ batch, message: error.message });
-        metadataUnavailable = true;
       }
     }
   }));
   signal?.throwIfAborted();
-  return { results: results.map(result => ({
-    ...(metadata.get(result.id) ?? { title: null, text: null, metadataUnavailable: true }), ...result,
-  })), metadataMs: performance.now() - started, metadataUnavailable, downloads, failures };
+  return { results: results.map(result => {
+    const passage = metadata.get(result.id);
+    const enriched = { ...result, ...(passage ?? { title: null, text: null, metadataUnavailable: true }) };
+    if (passage) delete enriched.metadataUnavailable;
+    return enriched;
+  }), metadataMs: performance.now() - started, metadataUnavailable: failures.length > 0, downloads, failures };
 }
 
+/**
+ * @param {SearchIndex} index
+ * @param {import('./retrieval.mjs').Codec} codec
+ * @param {{signal?: AbortSignal}} [options]
+ * @returns {Promise<{centroids: Float32Array, centroidMs: number}>}
+ */
 export async function loadSearchCentroids(index, codec, { signal } = {}) {
   signal?.throwIfAborted();
   const state = states.get(index);
@@ -165,8 +175,7 @@ export async function searchIndex(index, embedding, {
 } = {}) {
   const started = performance.now();
   signal?.throwIfAborted();
-  const state = states.get(index);
-  if (!state) throw new Error('Load a search index before searching.');
+  if (!states.has(index)) throw new Error('Load a search index before searching.');
   if (!['force-cache', 'no-store'].includes(cache)) throw new Error('Invalid search cache policy.');
   if (!Number.isSafeInteger(probes) || probes < 1 || probes > 100) {
     throw new Error('Choose between 1 and 100 probes.');
@@ -180,8 +189,8 @@ export async function searchIndex(index, embedding, {
   for (let d = 0; d < query.length; d++) query[d] /= norm;
   const { centroids, centroidMs } = await loadSearchCentroids(index, codec, { signal });
   const found = await searchVectors(index, query, { centroids, probes, k, signal, onProgress, cache });
-  const { results, metadataMs, metadataUnavailable, downloads: textDownloads } = await loadResultText(index, found.results, { signal, cache });
+  const { results, metadataMs, metadataUnavailable, downloads: textDownloads, failures } = await loadResultText(index, found.results, { signal, cache });
   return { results, candidates: found.candidates, clusters: found.selectedClusters.length, bytes: found.bytes,
-  centroidMs, vectorMs: found.queryMs, metadataMs,
-  metadataUnavailable, vectorDownloads: found.downloads, textDownloads, elapsedMs: performance.now() - started };
+    centroidMs, vectorMs: found.queryMs, metadataMs,
+    metadataUnavailable, vectorDownloads: found.downloads, textDownloads, failures, elapsedMs: performance.now() - started };
 }

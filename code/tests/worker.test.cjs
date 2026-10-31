@@ -72,10 +72,15 @@ if (!vm.SourceTextModule) {
     submit();
     const request = worker.requests.at(-1);
     assert.equal(request.type, 'search');
-    worker.onmessage({ data: { type: 'result', requestId: request.requestId, results: [],
+    worker.onmessage({ data: { type: 'result', requestId: request.requestId, results: [
+      { id: 5, title: null, text: null, metadataUnavailable: true, distance: 0 },
+      { id: 6, title: null, text: '', distance: 1 },
+    ],
       candidates: 1, clusters: 1, bytes: 10, inferenceMs: 1, centroidMs: 0, vectorMs: 2, metadataMs: 3 } });
     assert.equal(node('#searchBtn').disabled, false);
     assert.equal(node('#status').textContent, 'Search complete.');
+    assert.match(node('#results').children[0].children[1].textContent, /Try searching again/);
+    assert.equal(node('#results').children[1].children[1].textContent, '');
   });
 
   test('lab renders all three layouts in probe order with their original columns', async () => {
@@ -105,6 +110,100 @@ if (!vm.SourceTextModule) {
     assert.deepEqual(cells('countsRows').map(row => row.slice(0, 2)), [[8192, 1], [8192, 4]]);
     assert.deepEqual(cells('probesRows')[0], [1, '20', '50.0%', '3.00 / 4.00 ms', '2.00 MB']);
     assert.deepEqual(cells('codecsRows')[0], ['SQ6', 1, '1.00 MB', '2.00 ms', '1.00 ms', '50.0%']);
+  });
+
+  async function comparisons({ centroidOnly = false, wrongFixture = false, failedSave = false } = {}) {
+    const { PAPER_SETTINGS, paperPlan } = await import('../client_wiki/assets/benchmark.mjs');
+    const { CODEC_LABELS } = await import('../client_wiki/assets/retrieval.mjs');
+    const { node, document } = documentFixture();
+    const finished = deferred();
+    const packets = [], measurements = [];
+    const config = { ...PAPER_SETTINGS, version: 1, id: 'run', token: 'secret', seed: 17,
+      results_url: '/api/results', centroid_only: centroidOnly, network_mode: 'internet',
+      assets_base_url: 'https://example.org/', asset_base_urls: ['https://example.org/'],
+      hosting_manifest_url: 'https://example.org/routing.json', hosting_bundle_id: 'bundle',
+      fixture_ids: { small: 'small', medium: 'medium', large: 'large' },
+      suites: [['small', .05], ['medium', .15], ['large', .4]].map(([label, noise]) =>
+        ({ label, noise, url: `https://example.org/${label}.json` })) };
+    const context = vm.createContext({ document, URL, location: { href: 'http://localhost/client_wiki/' },
+      navigator: { userAgent: 'test browser' }, fetch: async (url, options) => {
+        if (options?.method !== 'POST') return { ok: true, json: async () => config };
+        const packet = JSON.parse(options.body);
+        packets.push(packet);
+        if (packet.complete || packet.error) finished.resolve();
+        const ok = !(failedSave && packet.result);
+        return { ok, status: ok ? 200 : 500, text: async () => 'disk full' };
+      } });
+    const benchmark = new vm.SyntheticModule(['loadSuite', 'warmIndexAssets', 'benchmark',
+      'verifyHostingManifest', 'PAPER_SETTINGS', 'paperPlan'], function () {
+      this.setExport('PAPER_SETTINGS', PAPER_SETTINGS);
+      this.setExport('paperPlan', paperPlan);
+      this.setExport('verifyHostingManifest', async () => {});
+      this.setExport('loadSuite', async url => {
+        const item = config.suites.find(item => item.url === url.href);
+        return { id: wrongFixture ? 'wrong' : item.label, noise: { level: item.noise },
+          truthData: new Uint32Array([1, 2]), indexes: config.cluster_counts.map(clusters =>
+            ({ clusters, url: `https://example.org/c${clusters}/manifest.json` })) };
+      });
+      this.setExport('warmIndexAssets', async (index, codecs) => ({ clusters: index.clusters,
+        cluster_files: index.clusters, cluster_bytes: 10, centroid_files: codecs.length }));
+      this.setExport('benchmark', async (index, suite, options) => {
+        measurements.push({ index, suite, options });
+        return { clusters: index.clusters, codec: options.codec, probes: options.probes,
+          recall: .5, accuracy_only: options.accuracyOnly, queryMs: { mean: 1, p95: 2 } };
+      });
+    }, { context });
+    const retrieval = new vm.SyntheticModule(['loadIndex', 'loadCentroids', 'internetAssetUrl', 'CODEC_LABELS'], function () {
+      this.setExport('CODEC_LABELS', CODEC_LABELS);
+      this.setExport('internetAssetUrl', value => value);
+      this.setExport('loadIndex', async url => ({ clusters: Number(/c(\d+)/.exec(url)[1]) }));
+      this.setExport('loadCentroids', async (index, codec, options) => ({
+        setupId: `${index.clusters}-${codec}`,
+        setupTrials: Array.from({ length: options.setupRepeats ?? 1 }, (_, sample) => ({ sample })),
+      }));
+    }, { context });
+    const source = fs.readFileSync(path.join(__dirname, '../client_wiki/assets/comparisons.mjs'), 'utf8');
+    const module = new vm.SourceTextModule(source, { context });
+    await module.link(name => name === './benchmark.mjs' ? benchmark : retrieval);
+    await module.evaluate();
+    await finished.promise;
+    await new Promise(setImmediate);
+    return { node, packets, measurements };
+  }
+
+  test('comparisons persist shared setups, every configuration and completion in order', async () => {
+    const { packets, measurements } = await comparisons();
+    assert.equal(packets[0].centroid_setups.length, 8);
+    assert.equal(packets[0].warmup.length, 3);
+    assert.equal(measurements.length, 57);
+    assert.equal(packets.filter(packet => packet.result).length, 57);
+    assert.equal(new Set(measurements.map(({ index, suite, options }) =>
+      [suite.id, index.clusters, options.probes, options.codec, options.accuracyOnly].join('|'))).size, 57);
+    for (const { index, options } of measurements) {
+      assert.equal(options.centroidSetup.centroid_setup_id, `${index.clusters}-${options.codec}`);
+    }
+    assert.equal(packets.at(-1).complete, true);
+    assert.equal(packets.at(-1).total, 57);
+  });
+
+  test('centroid-only comparisons save no query measurements', async () => {
+    const { packets, measurements } = await comparisons({ centroidOnly: true });
+    assert.equal(measurements.length, 0);
+    assert.equal(packets.length, 2);
+    assert.equal(packets[0].centroid_setups.length, 8);
+    assert.equal(packets[0].warmup.length, 0);
+    assert.equal(packets[1].complete, true);
+    assert.equal(packets[1].total, 0);
+  });
+
+  test('fixture mismatch and failed saves stop comparisons before completion', async () => {
+    for (const options of [{ wrongFixture: true }, { failedSave: true }]) {
+      const { packets, measurements, node } = await comparisons(options);
+      assert.ok(!packets.some(packet => packet.complete));
+      assert.match(packets.at(-1).error, options.wrongFixture ? /does not match/ : /disk full/);
+      assert.equal(measurements.length, options.wrongFixture ? 0 : 1);
+      assert.match(node('runStatus').textContent, options.wrongFixture ? /does not match/ : /disk full/);
+    }
   });
 
   async function worker() {

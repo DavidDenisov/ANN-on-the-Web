@@ -1,9 +1,56 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { gzipSync } from 'node:zlib';
-import { loadCentroids, searchVectors, loadIndex, fetchBytes } from '../client_wiki/assets/retrieval.mjs';
+import { loadCentroids, searchVectors, loadIndex, fetchBytes, fetchJson, internetAssetUrl, networkPolicy } from '../client_wiki/assets/retrieval.mjs';
 
 const dimensions = 384, clusters = 8192, length = dimensions * clusters;
+
+test('Internet policy rejects private hosts, escaped directories and controlling service workers', t => {
+  const base = 'https://example.org/assets/';
+  assert.equal(internetAssetUrl(base + 'file.gz', base), base + 'file.gz');
+  for (const url of ['http://example.org/assets/file', 'https://user@example.org/assets/file',
+    'https://127.1/assets/file', 'https://10.0.0.1/assets/file', 'https://localhost./assets/file',
+    'https://[::1]/assets/file', 'https://example.org/other/file', base + '%2e%2e%2fprivate']) {
+    assert.throws(() => internetAssetUrl(url, base));
+  }
+  const options = { networkMode: 'internet', assetsBaseUrl: base, assetsBaseUrls: [base] };
+  assert.equal(networkPolicy(options).cache, 'no-store');
+  assert.throws(() => networkPolicy({ ...options, assetsBaseUrls: ['https://other.example/'] }), /allowlist/);
+  assert.throws(() => networkPolicy({ ...options, assetsBaseUrl: base + '?query' }));
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: { serviceWorker: { controller: {} } } });
+  t.after(() => descriptor ? Object.defineProperty(globalThis, 'navigator', descriptor) : delete globalThis.navigator);
+  assert.throws(() => networkPolicy(options), /service worker/);
+});
+
+test('Internet transfers use CORS without credentials and reject hidden or private final URLs', async t => {
+  const base = 'https://example.org/assets/';
+  const options = { networkMode: 'internet', assetsBaseUrl: base, cache: 'force-cache' };
+  let response = { type: 'cors', url: base + 'file.bin' };
+  let requested;
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    requested = { url, options };
+    return { ok: true, arrayBuffer: async () => new Uint8Array([1, 2, 3]).buffer, ...response };
+  });
+  const result = await fetchBytes(base + 'file.bin', options);
+  assert.equal(result.bytes, 3);
+  assert.equal(requested.options.mode, 'cors');
+  assert.equal(requested.options.credentials, 'omit');
+  assert.equal(requested.options.cache, 'force-cache');
+  for (const final of [{ type: 'opaque', url: '' }, { type: 'cors', url: 'https://127.0.0.1/private' }]) {
+    response = final;
+    await assert.rejects(fetchBytes(base + 'file.bin', options));
+  }
+});
+
+test('JSON body cancellation preserves the caller abort reason', async t => {
+  const controller = new AbortController();
+  t.mock.method(globalThis, 'fetch', async () => ({ ok: true, json: async () => {
+    controller.abort();
+    throw controller.signal.reason;
+  } }));
+  await assert.rejects(fetchJson('https://example.org/index.json', { signal: controller.signal }), error => error === controller.signal.reason);
+});
 
 function centroidBytes(codec) {
   if (codec === 'f16') {

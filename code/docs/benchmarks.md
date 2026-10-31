@@ -2,7 +2,7 @@
 
 ## Run the paper comparisons over the Internet
 
-Browser runners require Node.js, Playwright (`npm install --no-save --package-lock=false playwright`), and Chromium 155 at `/snap/bin/chromium`, matching the recorded paper environment.
+The integrated browser comparison runner uses Python and an active browser tab. The recorded paper measurements used regular Chromium 155. Standalone browser/model and GPU measurement runners have been removed.
 
 The Python runner serves the local controls and saves results. The browser fetches centroid and cluster files directly from public HTTPS hosts. It never proxies timed downloads through Python.
 
@@ -26,56 +26,6 @@ The defaults use all 35,167,920 passages, 10,000 query sources per noise level, 
 Shared latency settings run once. The fixed matrix contains 39 latency configurations and 18 accuracy checks: 570,000 searches in total. The corpus, query count, probe sweeps, noise levels, formats and source recovery@1 are fixed to the paper.
 
 Queries are normalized source-passage vectors plus Gaussian noise of L2 length 0.05, 0.15 or 0.4, then normalized again. All levels share source passages, random vectors and trained indexes. The original passage remains indexed. Source recovery@1 is the fraction of queries returning their source passage first; this tests robustness to perturbations rather than relevance to natural-language questions.
-
-## Collect the remaining 32k results
-
-The supplement reuses the existing indexes, the same 10,000 large-noise queries, the completed 32k/FP16 results at 1, 4 and 8 probes, and the 1,000 saved 32k/FP16 centroid-load trials. It does not retrain, upload, rerun embedding/text benchmarks, or change paper files.
-
-Use the same Node/Playwright environment as the other browser benchmarks:
-
-```sh
-python3 code/benchmarks/remaining-32k.py code/data/benchmark/remaining-32k-new --check
-python3 code/benchmarks/remaining-32k.py code/data/benchmark/remaining-32k-new
-```
-
-`--check` validates local inputs and prints the plan without opening a browser, downloading assets, or creating the output directory. The measurement command requires a new output directory and runs these stages sequentially:
-
-1. The existing 1,000-source routing diagnostic at 32k, preserving the source/donor sample, noise magnitudes, directions and 5th-percentile reporting.
-2. A full cache-bypassing warm-up of the 32,768 cluster files and all six centroid files. Then 1,000 fetch/decode trials for each of SQ8, SQ6, SQ4, INT8 and PQ4; FP16 setup is reused.
-3. The missing FP16 probe settings (2, 3, 6, 10) and SQ6 at four probes, each with 10,000 timed queries. The four other compressed formats use 10,000 untimed accuracy queries each. The SQ6 timing run also supplies its recovery result, avoiding a duplicate accuracy pass. Every configuration gets three untimed query warm-ups. Timed configurations are shuffled and their actual order is saved.
-4. The existing startup benchmark with 32k/SQ6 in 100 fresh browser contexts.
-
-Timed centroid/query requests bypass browser caching; untimed accuracy checks retain the existing cache-allowed policy. The warm-up does not guarantee CDN residency. The regular Chromium 155 window must stay active during collection. This run downloads the full vector payload once for warm-up and fetches cluster files again for timed queries; it is a full benchmark, not a quick smoke test.
-
-Each completed query configuration and centroid file is saved separately under `retrieval/`; failures keep completed files and mark `retrieval/results.json` incomplete. `noise/` and `startup/` retain the corresponding raw records and summaries. `reused-baselines.csv` snapshots the three reused query rows. The combined `summary.csv` identifies each row's origin and includes mean/p95 plus median/quartiles for newly timed configurations. Reused rows retain their saved mean/p95; their raw timings remain in the original retrieval report. `centroid-summary.csv` combines the five new formats with the retained FP16 samples. `complete.json` appears only after every stage succeeds. Use a new output directory after an interruption; no old measurements are overwritten or silently treated as new trials.
-
-The legacy full comparison runner and its fixed 16k probe/codec matrix remain available. `startup.cjs` defaults to 16k for old inputs; new inputs can specify `"clusters": 32768`. The routing script likewise defaults to 16k and accepts `--clusters 32768`.
-
-## Exact full-corpus nearest-neighbour geometry on GPU
-
-Activate an environment with GPU-enabled Faiss and a visible CUDA GPU, then run from the repository root:
-
-```sh
-OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 \
-python -u code/benchmarks/full-nearest-gpu.py \
-  code/data/benchmark/full-nearest-gpu-new
-```
-
-The output directory must not exist. The runner requires GPU-enabled Faiss and a visible CUDA GPU; it has no CPU fallback. It reuses the globally uniform 1,000-source sample from `geometry-ratio-32k/summary.json`, reads those source vectors locally, and initializes all 1,000 queries before scanning. The sample is independent of cluster membership.
-
-All 35,167,920 passage vectors are already stored locally in 145 source `.npy` shards, totalling about 27.01 GB. Only the exported IVF cluster payloads were removed after publication. The scanner reads each complete local shard, reproduces the search index's FP16 conversion and normalization with `prepare_vectors`, compares all 1,000 sources against it in one GPU search, then resets the index for the next shard. The largest shard contains 242,538 vectors, about 373 MB as float32, plus GPU working memory. No files are downloaded. Searches use float32 `GpuIndexFlatIP`, with no centroid routing or approximate pruning. Scanning by source shard instead of IVF cluster gives the same exhaustive corpus search, while avoiding remote requests and holding only one shard's index on the GPU.
-
-Two candidates per source suffice to exclude that source's own passage ID. Identical vectors under different passage IDs remain valid neighbours. The runner merges the best match across every shard and checks contiguous passage-ID ranges and the full corpus count before marking results complete. Final cosine and ordinary L2 distance are recomputed in float64 from the selected stored FP16 vectors.
-
-Console progress and `progress.json` update approximately every ten seconds at shard boundaries, reporting completed shards, scanned vectors, percentage, elapsed time and ETA. All sources advance together, so their nearest neighbours become final only when the full scan finishes. A slow shard can delay the next update. `nearest-so-far.npz` saves provisional matches alongside each progress update; errors retain them and leave `complete` false. Use a new output directory for a fresh run; automatic resume is not implemented.
-
-Completed runs save `neighbours.csv` with source/nearest IDs, cosine similarity and L2 distance, and `summary.json` with means, medians, the number of identical-vector neighbours, and ratios to the alpha-0.4 perturbation geometry. Zero nearest-neighbour distance produces a null ratio. Input hashes and the exact source sample are recorded in `inputs.json`. This runner does not edit the paper or launch any browser timings.
-
-The CPU-based unit checks for local vector loading, normalization, self-exclusion and distinct identical vectors can run without a GPU:
-
-```sh
-python3 code/tests/test_full_nearest_gpu.py
-```
 
 ## Prepare and upload new indexes
 
@@ -137,7 +87,7 @@ The interactive lab uses the same fixed sweeps and source recovery@1, with a cho
 
 ## Saved results and paper exports
 
-The current paper data is under `code/data/benchmark/`:
+The original paper runs used these directories under `code/data/benchmark/`; their raw inputs and trials are excluded from this checkout:
 
 - `retrieval/`: completed 10,000-query retrieval/accuracy run, including its original centroid samples.
 - `centroid-setup/`: completed 1,000-trial-per-file rerun for Tables 2 and 4.
@@ -146,9 +96,7 @@ The current paper data is under `code/data/benchmark/`:
 - `encoder/compatibility/`: reference inputs for the reported re-embedding check.
 - `result-text/`: 1,000 varied ten-result loads over 10,000 sampled passages.
 
-The [client measurement notes](client-measurements.md) preserve inference, startup, compatibility, text-loading, and complete-query protocols and rerun commands. These use regular Chromium 155; inference uses four threads in the paper. The text benchmark warms each required text batch once before timing and bypasses browser and decoded-text caches.
-
-The Node runners share the local isolated server and Chromium launch in `code/benchmarks/browser.cjs`. Inference, startup and text trials are journaled during collection; completed runs remove these duplicate journals after saving their raw records in `results.json`. Interrupted runs keep their journals.
+The [client measurement notes](client-measurements.md) preserve the historical inference, startup, compatibility, text-loading, and complete-query protocols. These use regular Chromium 155; inference uses four threads in the paper. The text benchmark warms each required text batch once before timing and bypasses browser and decoded-text caches.
 
 Automatic runs save `run.json`, `results.json`, `centroid-summary.csv`, `summary.csv` and `figures/`. Centroid-only runs omit query summaries. `measurements.jsonl` journals each accepted query configuration and is removed after the completed report is saved. Interrupted runs retain their journal; use the same preparation and a new output directory to retry. Results validate settings, source targets, file sizes, asset URLs and identities before accepting measurements.
 

@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Clustering lab · Wikipedia Semantic Search</title>
-  <meta name="description" content="Measure synthetic source recovery and browser download and search time on prepared datasets.">
+  <meta name="description" content="Measure clustering recall and live browser download and search time on prepared datasets.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext y='.9em' font-size='56'%3E📊%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="assets/styles.css">
   <script type="module" src="assets/lab.mjs"></script>
@@ -44,7 +44,6 @@
       <p class="fixture-info" id="fixtureInfo">Loading benchmark…</p>
       <p class="query-help">Paper settings: 10,000 queries per configuration and source recovery@1.</p>
       </fieldset>
-      <p class="query-help"><strong>Large download:</strong> every configuration runs 10,000 queries. Checks can transfer hundreds of GB; run them only on an unmetered connection. Close this tab to stop a run.</p>
       <button class="btn btn-primary" id="runAll" type="button" disabled>Run all checks</button>
       <p class="status" id="labStatus" role="status" aria-live="polite">Loading test queries…</p>
       <progress id="labProgress" max="1" value="0" hidden aria-label="Benchmark progress"></progress>
@@ -72,6 +71,7 @@
         <p class="footnote">Query timings are omitted for this accuracy-only check.</p>
       </section>
       <p class="measurement-note" id="measurementNote">Queries and results are measured in your browser using the uploaded Wikipedia vectors.</p>
+      <p class="measurement-note">Passage text © Wikipedia contributors, under <a rel="license" href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>. Search result titles link to source articles and their contributor histories. Passages are extracted from archived articles. <a href="DATA-NOTICE.txt" download>Download the data notice</a>.</p>
     </div>
   </main>
 </body>

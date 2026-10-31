@@ -85,9 +85,13 @@ function renderResults(found) {
       title.replaceChildren(link);
     } else title.textContent = `Passage ${result.id}`;
     const text = document.createElement('p');
-    text.textContent = typeof result.text === 'string' && result.text
-      ? result.text : result.text === null ? 'None'
-        : 'Passage text is unavailable. Try searching again to retry the metadata download.';
+    if (result.metadataUnavailable) {
+      text.textContent = 'Passage text is unavailable. Try searching again to retry the metadata download.';
+    } else if (typeof result.text === 'string') {
+      text.textContent = result.text;
+    } else {
+      text.textContent = 'None';
+    }
     const distance = document.createElement('p');
     distance.className = 'passage-distance';
     distance.textContent = `Squared L2 distance: ${result.distance.toFixed(4)} · Passage ${result.id}`;

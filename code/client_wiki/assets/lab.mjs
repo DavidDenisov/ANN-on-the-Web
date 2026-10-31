@@ -9,8 +9,11 @@ let busy = false;
 
 const percent = value => `${(100 * value).toFixed(1)}%`;
 const ms = value => `${value.toFixed(2)} ms`;
-const bytes = value => value < 1000 ? `${Math.round(value)} B`
-  : value < 1e6 ? `${(value / 1000).toFixed(1)} kB` : `${(value / 1e6).toFixed(2)} MB`;
+function bytes(value) {
+  if (value < 1000) return `${Math.round(value)} B`;
+  if (value < 1e6) return `${(value / 1000).toFixed(1)} kB`;
+  return `${(value / 1e6).toFixed(2)} MB`;
+}
 
 function setBusy(value) {
   busy = value;

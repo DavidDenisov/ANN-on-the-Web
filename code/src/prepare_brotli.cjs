@@ -81,6 +81,7 @@ async function prepareBrotli(source, output) {
     if (failed) throw failed;
     assert.equal(completed, total);
     assert.equal(fs.readdirSync(path.join(staged, 'metadata')).filter(name => name.endsWith('.bin.br')).length, total);
+    fs.copyFileSync(path.join(__dirname, '../client_wiki/DATA-NOTICE.txt'), path.join(staged, 'DATA-NOTICE.txt'));
     for (const [position, index] of indexes.entries()) {
       index.metadata = { format: 'binary-http-v1', count, batch_size: 500,
         pattern: `${position ? '../' : ''}metadata/meta_{id}.bin.br` };

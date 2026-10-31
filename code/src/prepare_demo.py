@@ -5,6 +5,7 @@ import argparse
 import gzip
 import json
 from pathlib import Path
+import shutil
 import struct
 from tempfile import TemporaryDirectory
 from urllib.parse import urlsplit
@@ -12,6 +13,7 @@ from urllib.parse import urlsplit
 import pyarrow.parquet as pq
 
 from download_dataset import DEFAULT_OUTPUT as SOURCE, DIMENSIONS, validate_shard
+from paper_settings import DEMO_INDEX_PATHS
 
 
 CODE = Path(__file__).resolve().parents[1]
@@ -20,14 +22,13 @@ BATCH_SIZE = 500
 READ_BATCH_SIZE = 4096
 
 
-def positive_integer(value):
+def is_positive_integer(value):
     return type(value) is int and value > 0
 
 
-def load_indexes():
+def load_indexes() -> list[tuple[str, dict]]:
     indexes = []
-    for clusters, relative in ((16384, "manifest.json"), (8192, "c8192/manifest.json"),
-                               (32768, "c32768/manifest.json")):
+    for clusters, relative in DEMO_INDEX_PATHS:
         index = json.loads((UPLOADED / f"c{clusters}/manifest.json").read_text())
         if (index.get("version") != 1 or index.get("metric") != "normalized-l2"
                 or index.get("dimensions") != DIMENSIONS or index.get("record_bytes") != 4 + 2 * DIMENSIONS
@@ -43,7 +44,7 @@ def load_indexes():
             raise ValueError("Uploaded indexes must share the same corpus and source snapshot")
         for descriptor in [*index["centroids"].values(), *index["cluster_files"]]:
             if (not isinstance(descriptor, dict) or not isinstance(descriptor.get("file"), str)
-                    or not positive_integer(descriptor.get("bytes"))):
+                    or not is_positive_integer(descriptor.get("bytes"))):
                 raise ValueError("Index assets need a URL and positive byte size")
             url = urlsplit(descriptor["file"])
             if url.scheme != "https" or not url.hostname or url.username or url.password:
@@ -52,7 +53,7 @@ def load_indexes():
     return indexes
 
 
-def metadata_source(index):
+def metadata_source(index: dict) -> list[dict]:
     source = json.loads((SOURCE / "manifest.json").read_text())
     if source.get("dimensions") != DIMENSIONS or source.get("dtype") != "<f2":
         raise ValueError("Expected the downloaded float16 Wikipedia source")
@@ -68,7 +69,7 @@ def metadata_source(index):
         raise ValueError("Full-corpus metadata requires the index's complete frozen shard order")
     shards, offset = [], 0
     for shard in frozen:
-        if shard.get("offset") != offset or not positive_integer(shard.get("count")):
+        if shard.get("offset") != offset or not is_positive_integer(shard.get("count")):
             raise ValueError("Source shard offsets or counts do not match")
         directory = SOURCE / Path(shard["name"]).stem
         if validate_shard(directory, Path(shard["name"]).name) != shard["count"]:
@@ -82,12 +83,12 @@ def metadata_source(index):
 
 def write_batch(staged, records, first, count):
     payload = struct.pack("<4sII", b"WMD1", first, count) + records
-    with (staged / "metadata" / f"meta_{first // BATCH_SIZE}.bin.gz").open("wb") as output:
-        with gzip.GzipFile(filename="", fileobj=output, mode="wb", mtime=0, compresslevel=1) as compressed:
-            compressed.write(payload)
+    with ((staged / "metadata" / f"meta_{first // BATCH_SIZE}.bin.gz").open("wb") as output,
+          gzip.GzipFile(filename="", fileobj=output, mode="wb", mtime=0, compresslevel=1) as compressed):
+        compressed.write(payload)
 
 
-def write_metadata(shards, staged):
+def write_metadata(shards, staged) -> int:
     pending, written = bytearray(), 0
     for shard in shards:
         offset = shard["offset"]
@@ -114,7 +115,7 @@ def write_metadata(shards, staged):
     return written
 
 
-def prepare_demo(output):
+def prepare_demo(output: Path) -> None:
     output = Path(output).resolve()
     if output.exists():
         raise FileExistsError(f"Refusing to overwrite {output}")
@@ -125,6 +126,7 @@ def prepare_demo(output):
     with TemporaryDirectory(prefix=".demo-export-", dir=output.parent) as temporary:
         staged = Path(temporary) / "bundle"
         (staged / "metadata").mkdir(parents=True)
+        shutil.copy2(CODE / "client_wiki/DATA-NOTICE.txt", staged / "DATA-NOTICE.txt")
         if write_metadata(shards, staged) != count:
             raise ValueError("Exported passage count does not match the indexes")
         for relative, index in indexes:
@@ -141,7 +143,7 @@ def prepare_demo(output):
     print(f"Saved all three full-corpus demo indexes: {output}")
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True, help="new full-corpus gzip staging directory")
     prepare_demo(parser.parse_args().output)

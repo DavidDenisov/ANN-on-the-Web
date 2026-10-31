@@ -4,7 +4,6 @@
 import argparse
 import csv
 import hashlib
-import ipaddress
 import json
 import math
 import secrets
@@ -21,41 +20,41 @@ from urllib.parse import unquote, urljoin, urlsplit
 
 import numpy as np
 
-from cluster import CODECS, CLUSTER_COUNTS, CORPUS_COUNT, DEFAULT_INPUT, NOISE_LEVELS, QUERY_COUNT, build_comparison_data, require_gpu
+from paper_settings import CLUSTER_COUNTS, CORPUS_COUNT, DEFAULT_INPUT, NOISE_LABELS, NOISE_LEVELS, QUERY_COUNT, comparison_memberships, comparison_settings
 from cloudflare import StreamingPagesPublisher, ensure_pages_project
+from measurement_validation import centroid_downloads, validate_centroid_samples, finite_number, is_public_host, positive_integer, validate_result
 
 
 CODE_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = CODE_ROOT / "data" / "benchmark" / "run-new"
-NOISE_LABELS = ("small", "medium", "large")
 MAX_RESULT_BYTES = 256 * 1024 * 1024
 
 
-def internet_url(value, bases=None):
+def internet_url(value: str, bases: list[str] | None = None) -> str:
     """Reject loopback/private assets and requests outside the deployed package."""
+    if not isinstance(value, str):
+        raise ValueError("Internet assets require a public HTTPS URL")
     parsed = urlsplit(value)
-    host = (parsed.hostname or "").lower()
+    host = (parsed.hostname or "").lower().rstrip(".")
     if parsed.scheme != "https" or not host or parsed.username or parsed.password:
         raise ValueError("Internet assets require a public HTTPS URL")
-    try:
-        public = ipaddress.ip_address(host).is_global
-    except ValueError:
-        public = "." in host and host != "localhost" and not host.endswith((".localhost", ".local", ".internal", ".test", ".invalid"))
-    if not public:
+    if not is_public_host(host):
         raise ValueError("Internet assets cannot use localhost or private/reserved addresses")
-    if bases is not None and not any(
-        parsed.netloc.lower() == urlsplit(base).netloc.lower()
-        and unquote(parsed.path).startswith(unquote(urlsplit(base).path).rstrip("/") + "/")
-        and ".." not in unquote(parsed.path).split("/") for base in bases
-    ):
-        raise ValueError("Asset URL is outside this deployment")
+    if bases is not None:
+        path = unquote(parsed.path)
+        roots = (urlsplit(base) for base in bases)
+        if not any(parsed.netloc.lower() == root.netloc.lower()
+                   and path.startswith(unquote(root.path).rstrip("/") + "/")
+                   and ".." not in path.split("/") for root in roots):
+            raise ValueError("Asset URL is outside this deployment")
     return parsed.geturl()
 
 
-def wait_for_assets(roots, timeout=900):
+def wait_for_asset_hosts_tls(roots: list[str], timeout: float = 900) -> None:
     """New Pages preview hosts can need time before their TLS certificates are ready."""
     pending = {(parsed.hostname, parsed.port or 443)
                for parsed in (urlsplit(internet_url(root)) for root in roots)}
+    failures = {}
     context = ssl.create_default_context()
     deadline = time.monotonic() + timeout
     while pending:
@@ -68,19 +67,20 @@ def wait_for_assets(roots, timeout=900):
                     with context.wrap_socket(connection, server_hostname=host):
                         pass
                 pending.remove((host, port))
-            except OSError:
-                pass
+            except OSError as error:
+                failures[host, port] = error
         if not pending:
             return
         remaining = deadline - time.monotonic()
         if remaining <= 0:
-            hosts = ", ".join(host for host, _ in sorted(pending))
-            raise TimeoutError(f"HTTPS assets are not ready after {timeout}s: {hosts}. Retry after Pages certificates are provisioned.")
+            details = "; ".join(f"{host}:{port}: {failures.get((host, port), 'not checked before deadline')}"
+                                for host, port in sorted(pending))
+            raise TimeoutError(f"HTTPS assets are not ready after {timeout}s: {details}") from next(iter(failures.values()), None)
         print(f"Waiting for verified HTTPS on {len(pending)} asset host(s); retrying in {min(15, remaining):g}s…", flush=True)
         time.sleep(min(15, remaining))
 
 
-def load_prepared_data(data):
+def load_prepared_data(data: Path) -> list[dict]:
     suites = []
     for label, noise in zip(NOISE_LABELS, NOISE_LEVELS):
         path = f"noise-{label}/suite.json"
@@ -102,10 +102,11 @@ def load_prepared_data(data):
     return suites
 
 
-def configure_network(config, suites, hosting_manifest, data):
-    config["fixture_ids"] = dict(zip(NOISE_LABELS, (suite["id"] for suite in suites)))
+def configure_network(suites: list[dict], hosting_manifest: Path, data: Path) -> dict[str, object]:
+    """Validate a deployment and return network fields without changing the suites."""
+    fixture_ids = dict(zip(NOISE_LABELS, (suite["id"] for suite in suites)))
     hosting = json.loads(Path(hosting_manifest).read_text(encoding="utf-8"))
-    if not isinstance(hosting, dict) or hosting.get("source_fixture_ids") != config["fixture_ids"]:
+    if not isinstance(hosting, dict) or hosting.get("source_fixture_ids") != fixture_ids:
         raise ValueError("The deployment was packaged from different prepared data; rebuild and upload it")
     root = Path(data).resolve()
     checked = set()
@@ -126,27 +127,19 @@ def configure_network(config, suites, hosting_manifest, data):
         raise ValueError("The hosting allowlist must include the asset root")
     for value in bases:
         internet_url(value)
-    config.update(network_mode="internet", assets_base_url=base, asset_base_urls=bases,
-                  hosting_bundle_id=hosting["bundle_id"], hosting_manifest_url=urljoin(base, "routing.json"))
-    for item, suite in zip(config["suites"], suites):
-        item["url"] = suite["url"] = urljoin(base, suite["suite_path"])
+    return {"fixture_ids": fixture_ids, "network_mode": "internet", "assets_base_url": base,
+            "asset_base_urls": bases, "hosting_bundle_id": hosting["bundle_id"],
+            "hosting_manifest_url": urljoin(base, "routing.json")}
 
 
-def comparison_plan():
+def comparison_plan() -> dict[tuple[str, int, int, str, bool], list[str]]:
     """The paper's 57 unique latency and accuracy configurations."""
     plan = {}
-
-    def add(label, clusters, probes, codec, check):
-        plan.setdefault((label, clusters, probes, codec, check == "codecs"), []).append(check)
-
+    memberships = comparison_memberships()
     for label in NOISE_LABELS:
-        for clusters in CLUSTER_COUNTS:
-            for probes in (1, 4, 8):
-                add(label, clusters, probes, "f16", "counts")
-        for probes in (1, 2, 3, 4, 6, 8, 10):
-            add(label, 16384, probes, "f16", "probes")
-        for codec in CODECS:
-            add(label, 16384, 4, codec, "codecs")
+        for name, configurations in memberships.items():
+            for key in sorted(configurations):
+                plan.setdefault((label, *key), []).append(name)
     return plan
 
 
@@ -170,21 +163,26 @@ class ResultStore:
     def _centroid_csv(self, rows):
         setup_fields = ("clusters", "codec", "samples", "centroid_bytes", "download_mean_ms", "download_p95_ms",
                         "decode_mean_ms", "decode_p95_ms", "centroid_setup_id")
-        from figures import _centroid_downloads
 
         with (self.output / "centroid-summary.csv").open("x", newline="", encoding="utf-8") as output:
             writer = csv.DictWriter(output, fieldnames=setup_fields)
             writer.writeheader()
             for clusters, codec in sorted({(row["clusters"], row["codec"]) for row in rows}):
                 shared_rows = [row for row in rows if (row["clusters"], row["codec"]) == (clusters, codec)]
-                samples = _centroid_downloads(shared_rows)
+                samples = centroid_downloads(shared_rows)
                 downloads = sorted(sample["downloadMs"] for sample in samples)
                 decodes = sorted(sample["decodeMs"] for sample in samples)
-                writer.writerow(dict(zip(setup_fields, (
-                    clusters, codec, len(samples), samples[0]["bytes"], statistics.mean(downloads),
-                    downloads[math.ceil(len(downloads) * .95) - 1], statistics.mean(decodes),
-                    decodes[math.ceil(len(decodes) * .95) - 1], shared_rows[0]["centroid_setup_id"],
-                ))))
+                writer.writerow({
+                    'clusters': clusters,
+                    'codec': codec,
+                    'samples': len(samples),
+                    'centroid_bytes': samples[0]['bytes'],
+                    'download_mean_ms': statistics.mean(downloads),
+                    'download_p95_ms': downloads[math.ceil(len(downloads) * 0.95) - 1],
+                    'decode_mean_ms': statistics.mean(decodes),
+                    'decode_p95_ms': decodes[math.ceil(len(decodes) * 0.95) - 1],
+                    'centroid_setup_id': shared_rows[0]['centroid_setup_id'],
+                })
 
     def _csv(self):
         fields = ("noise", "noise_level", "checks", "clusters", "probes", "codec", "k", "queries", "repeats",
@@ -197,17 +195,130 @@ class ResultStore:
                 row = measurement["result"]
                 trials = row["trials"]
                 times = sorted(trial["queryMs"] for trial in trials) if not row["accuracy_only"] else []
-                writer.writerow(dict(zip(fields, (
-                    measurement["noise_label"], self.report["fixtures"][measurement["noise_label"]]["noise"]["level"],
-                    ";".join(measurement["memberships"]), row["clusters"], row["probes"], row["codec"], row["k"],
-                    row["queries"], row["repeats"], row["accuracy_only"], row["cluster_fetch_cache"],
-                    statistics.mean(trial["recall"] for trial in trials),
-                    statistics.mean(times) if times else "", times[math.ceil(len(times) * .95) - 1] if times else "", row["bytesPerQuery"],
-                    row["centroidBytes"], row["centroid_setup_id"], row["centroidDownloadMs"]["mean"], row["centroidDecodeMs"]["mean"],
-                    row["network_mode"], row.get("asset_base_url", ""), row["fixture_id"],
-                ))))
+                writer.writerow({
+                    'noise': measurement['noise_label'],
+                    'noise_level': self.report['fixtures'][measurement['noise_label']]['noise']['level'],
+                    'checks': ';'.join(measurement['memberships']),
+                    'clusters': row['clusters'],
+                    'probes': row['probes'],
+                    'codec': row['codec'],
+                    'k': row['k'],
+                    'queries': row['queries'],
+                    'repeats': row['repeats'],
+                    'accuracy_only': row['accuracy_only'],
+                    'cluster_fetch_cache': row['cluster_fetch_cache'],
+                    'source_recovery': statistics.mean((trial['recall'] for trial in trials)),
+                    'query_mean_ms': statistics.mean(times) if times else '',
+                    'query_p95_ms': times[math.ceil(len(times) * 0.95) - 1] if times else '',
+                    'bytes_per_query': row['bytesPerQuery'],
+                    'centroid_bytes': row['centroidBytes'],
+                    'centroid_setup_id': row['centroid_setup_id'],
+                    'centroid_download_mean_ms': row['centroidDownloadMs']['mean'],
+                    'centroid_decode_mean_ms': row['centroidDecodeMs']['mean'],
+                    'network_mode': row['network_mode'],
+                    'asset_base_url': row.get('asset_base_url', ''),
+                    'fixture_id': row['fixture_id'],
+                })
 
-    def accept(self, packet):
+    def _accept_centroid_setups(self, packet):
+        setups = packet["centroid_setups"]
+        expected = {(key[1], key[3]) for key in self.expected}
+        if (self.seen or self.report.get("centroid_setups") or not isinstance(setups, list)
+                or len(setups) != len(expected)):
+            raise ValueError("Unexpected centroid setup stage")
+        seen = set()
+        for setup in setups:
+            if not isinstance(setup, dict):
+                raise ValueError("Each centroid setup must be an object")
+            clusters = positive_integer(setup.get("clusters"), "setup clusters")
+            codec = setup.get("codec")
+            if not isinstance(codec, str) or (clusters, codec) not in expected or (clusters, codec) in seen:
+                raise ValueError("Unexpected or duplicate centroid setup")
+            seen.add((clusters, codec))
+            validate_centroid_samples(setup)
+            if setup["centroid_setup_repeats"] != self.config["centroid_setup_repeats"]:
+                raise ValueError("Centroid setup sample count does not match this run")
+            for sample in setup["centroidTrials"]:
+                internet_url(sample["requested_url"], self.config["asset_base_urls"])
+                internet_url(sample.get("resolved_url", ""))
+        if len({setup["centroid_setup_id"] for setup in setups}) != len(expected):
+            raise ValueError("Different centroid files must have distinct setup identities")
+        warmup = packet.get("warmup")
+        warmed_counts = [] if self.config["centroid_only"] else list(CLUSTER_COUNTS)
+        if (not isinstance(warmup, list) or len(warmup) != len(warmed_counts)
+                or any(not isinstance(item, dict) or type(item.get("clusters")) is not int for item in warmup)
+                or {item.get("clusters") for item in warmup} != set(warmed_counts)):
+            raise ValueError("Asset warm-up does not match this run's settings")
+        for item in warmup:
+            if (item.get("cluster_files") != item["clusters"] or item.get("centroid_files")
+                    != len({codec for clusters, codec in expected if clusters == item["clusters"]})):
+                raise ValueError("Incomplete asset warm-up")
+            positive_integer(item.get("cluster_bytes"), "warm-up cluster bytes")
+        self.report["warmup"] = warmup
+        self.report["centroid_setups"] = setups
+        self._save()
+        self._centroid_csv(setups)
+        print(f"Saved {len(setups)} centroid setups and centroid-summary.csv", flush=True)
+
+    def _accept_measurement(self, packet):
+        row, label = packet.get("result"), packet.get("noise_label")
+        if not isinstance(row, dict) or not isinstance(label, str):
+            raise ValueError("Missing measurement")
+        key = (label, row.get("clusters"), row.get("probes"), row.get("codec"), row.get("accuracy_only"))
+        if key not in self.expected or key in self.seen or packet.get("memberships") != self.expected[key]:
+            raise ValueError("Unexpected, duplicate or incorrectly grouped measurement")
+
+
+        validate_result(row)
+        if row.get("centroid_setup_repeats") != self.config["centroid_setup_repeats"]:
+            raise ValueError("Centroid setup sample count does not match this run")
+        setups = self.report.get("centroid_setups", [])
+        setup = next((setup for setup in setups if (setup["clusters"], setup["codec"])
+                      == (row["clusters"], row["codec"])), None)
+        if not setup or row.get("centroid_setup_id") != setup["centroid_setup_id"]:
+            raise ValueError("Measure and save centroid setup before query configurations")
+        centroid_downloads(setups + [row])
+        if (row.get("network_mode") != self.config["network_mode"]
+                or row.get("fixture_id") != self.config["fixture_ids"][label]):
+            raise ValueError("Measurement network mode or fixture identity does not match this run")
+        if self.config["network_mode"] == "internet":
+            if (row.get("asset_base_url") != self.config["assets_base_url"]
+                    or row.get("asset_base_urls") != self.config["asset_base_urls"]
+                    or row.get("hosting_bundle_id") != self.config.get("hosting_bundle_id")):
+                raise ValueError("Measurement asset deployment does not match this run")
+            transfers = list(row["centroidTrials"])
+            for trial in row["trials"]:
+                if not trial.get("downloads"):
+                    raise ValueError("Internet query trials must record actual asset downloads")
+                transfers.extend(trial["downloads"])
+            for transfer in transfers:
+                internet_url(transfer.get("requested_url", ""), self.config["asset_base_urls"])
+                internet_url(transfer.get("resolved_url", ""))
+        positive_integer(row.get("centroidBytes"), "centroidBytes")
+        finite_number(row.get("bytesPerQuery"), "bytesPerQuery")
+        for name in ("centroidDownloadMs", "centroidDecodeMs"):
+            if not isinstance(row.get(name), dict):
+                raise ValueError(f"Missing {name} measurements")
+            finite_number(row[name].get("mean"), name)
+        if (row.get("metric") != "source-recovery" or row.get("k") != self.config["k"]
+                or row.get("queries") != self.config["query_count"]
+                or row.get("noise") != self.report["fixtures"][label]["noise"]):
+            raise ValueError("Measurement settings do not match this run")
+        for trial in row["trials"]:
+            ids = trial.get("resultIds")
+            target = int(self.targets[trial["query"]])
+            if (not isinstance(ids, list) or len(ids) > row["k"] or len(set(ids)) != len(ids)
+                    or any(type(value) is not int or not 0 <= value < self.report["fixtures"][label]["count"] for value in ids)
+                    or trial.get("targetId") != target or trial["recall"] != float(target in ids)):
+                raise ValueError("Trial does not measure recovery of its source passage")
+        measurement = {"noise_label": label, "memberships": packet["memberships"], "result": row}
+        with (self.output / "measurements.jsonl").open("a", encoding="utf-8") as journal:
+            journal.write(json.dumps(measurement, separators=(",", ":")) + "\n")
+        self.report["measurements"].append(measurement)
+        self.seen.add(key)
+        print(f"Saved {len(self.seen)}/{len(self.expected)}: {label}, C={key[1]}, probes={key[2]}, {key[3]}", flush=True)
+
+    def accept(self, packet: dict) -> None:
         if not isinstance(packet, dict) or packet.get("id") != self.config["id"] or packet.get("token") != self.config["token"]:
             raise ValueError("Invalid run credentials")
         with self.lock:
@@ -220,46 +331,7 @@ class ResultStore:
                 self.done.set()
                 return
             if "centroid_setups" in packet:
-                from figures import _centroid_samples, _integer
-
-                setups = packet["centroid_setups"]
-                expected = {(key[1], key[3]) for key in self.expected}
-                if (self.seen or self.report.get("centroid_setups") or not isinstance(setups, list)
-                        or len(setups) != len(expected)):
-                    raise ValueError("Unexpected centroid setup stage")
-                seen = set()
-                for setup in setups:
-                    if not isinstance(setup, dict):
-                        raise ValueError("Each centroid setup must be an object")
-                    clusters = _integer(setup.get("clusters"), "setup clusters")
-                    codec = setup.get("codec")
-                    if not isinstance(codec, str) or (clusters, codec) not in expected or (clusters, codec) in seen:
-                        raise ValueError("Unexpected or duplicate centroid setup")
-                    seen.add((clusters, codec))
-                    _centroid_samples(setup)
-                    if setup["centroid_setup_repeats"] != self.config["centroid_setup_repeats"]:
-                        raise ValueError("Centroid setup sample count does not match this run")
-                    for sample in setup["centroidTrials"]:
-                        internet_url(sample["requested_url"], self.config["asset_base_urls"])
-                        internet_url(sample.get("resolved_url", ""))
-                if len({setup["centroid_setup_id"] for setup in setups}) != len(expected):
-                    raise ValueError("Different centroid files must have distinct setup identities")
-                warmup = packet.get("warmup")
-                warmed_counts = [] if self.config["centroid_only"] else list(CLUSTER_COUNTS)
-                if (not isinstance(warmup, list) or len(warmup) != len(warmed_counts)
-                        or any(not isinstance(item, dict) or type(item.get("clusters")) is not int for item in warmup)
-                        or {item.get("clusters") for item in warmup} != set(warmed_counts)):
-                    raise ValueError("Asset warm-up does not match this run's settings")
-                for item in warmup:
-                    if (item.get("cluster_files") != item["clusters"] or item.get("centroid_files")
-                            != len({codec for clusters, codec in expected if clusters == item["clusters"]})):
-                        raise ValueError("Incomplete asset warm-up")
-                    _integer(item.get("cluster_bytes"), "warm-up cluster bytes")
-                self.report["warmup"] = warmup
-                self.report["centroid_setups"] = setups
-                self._save()
-                self._centroid_csv(setups)
-                print(f"Saved {len(setups)} centroid setups and centroid-summary.csv", flush=True)
+                self._accept_centroid_setups(packet)
                 return
             if packet.get("complete") is True:
                 if self.config.get("centroid_only"):
@@ -276,65 +348,7 @@ class ResultStore:
                 return
             if self.config.get("centroid_only"):
                 raise ValueError("Centroid-only runs do not accept query measurements")
-            row, label = packet.get("result"), packet.get("noise_label")
-            if not isinstance(row, dict) or not isinstance(label, str):
-                raise ValueError("Missing measurement")
-            key = (label, row.get("clusters"), row.get("probes"), row.get("codec"), row.get("accuracy_only"))
-            if key not in self.expected or key in self.seen or packet.get("memberships") != self.expected[key]:
-                raise ValueError("Unexpected, duplicate or incorrectly grouped measurement")
-            from figures import _centroid_downloads, _integer, _number, _row
-
-            _row(row)
-            if row.get("cluster_fetch_cache") != ("force-cache" if row["accuracy_only"] else "no-store"):
-                raise ValueError("Measurement cache policy does not match its test")
-            if row.get("centroid_setup_repeats") != self.config["centroid_setup_repeats"]:
-                raise ValueError("Centroid setup sample count does not match this run")
-            setups = self.report.get("centroid_setups", [])
-            setup = next((setup for setup in setups if (setup["clusters"], setup["codec"])
-                          == (row["clusters"], row["codec"])), None)
-            if not setup or row.get("centroid_setup_id") != setup["centroid_setup_id"]:
-                raise ValueError("Measure and save centroid setup before query configurations")
-            _centroid_downloads(setups + [row])
-            if (row.get("network_mode") != self.config["network_mode"]
-                    or row.get("fixture_id") != self.config["fixture_ids"][label]):
-                raise ValueError("Measurement network mode or fixture identity does not match this run")
-            if self.config["network_mode"] == "internet":
-                if (row.get("asset_base_url") != self.config["assets_base_url"]
-                        or row.get("asset_base_urls") != self.config["asset_base_urls"]
-                        or row.get("hosting_bundle_id") != self.config.get("hosting_bundle_id")):
-                    raise ValueError("Measurement asset deployment does not match this run")
-                transfers = list(row["centroidTrials"])
-                for trial in row["trials"]:
-                    if not trial.get("downloads"):
-                        raise ValueError("Internet query trials must record actual asset downloads")
-                    transfers.extend(trial["downloads"])
-                for transfer in transfers:
-                    internet_url(transfer.get("requested_url", ""), self.config["asset_base_urls"])
-                    internet_url(transfer.get("resolved_url", ""))
-            _integer(row.get("centroidBytes"), "centroidBytes")
-            _number(row.get("bytesPerQuery"), "bytesPerQuery")
-            for name in ("centroidDownloadMs", "centroidDecodeMs"):
-                if not isinstance(row.get(name), dict):
-                    raise ValueError(f"Missing {name} measurements")
-                _number(row[name].get("mean"), name)
-            if (row.get("metric") != "source-recovery" or row.get("k") != self.config["k"]
-                    or row.get("queries") != self.config["query_count"]
-                    or row.get("repeats") != 1
-                    or row.get("noise") != self.report["fixtures"][label]["noise"]):
-                raise ValueError("Measurement settings do not match this run")
-            for trial in row["trials"]:
-                ids = trial.get("resultIds")
-                target = int(self.targets[trial["query"]])
-                if (not isinstance(ids, list) or len(ids) > row["k"] or len(set(ids)) != len(ids)
-                        or any(type(value) is not int or not 0 <= value < self.report["fixtures"][label]["count"] for value in ids)
-                        or trial.get("targetId") != target or trial["recall"] != float(target in ids)):
-                    raise ValueError("Trial does not measure recovery of its source passage")
-            measurement = {"noise_label": label, "memberships": packet["memberships"], "result": row}
-            with (self.output / "measurements.jsonl").open("a", encoding="utf-8") as journal:
-                journal.write(json.dumps(measurement, separators=(",", ":")) + "\n")
-            self.report["measurements"].append(measurement)
-            self.seen.add(key)
-            print(f"Saved {len(self.seen)}/{len(self.expected)}: {label}, C={key[1]}, probes={key[2]}, {key[3]}", flush=True)
+            self._accept_measurement(packet)
 
 
 class ComparisonHandler(SimpleHTTPRequestHandler):
@@ -344,6 +358,20 @@ class ComparisonHandler(SimpleHTTPRequestHandler):
 
     def log_message(self, *args):
         pass
+
+    def parse_request(self) -> bool:
+        if not super().parse_request():
+            return False
+        address, port = self.server.server_address[:2]
+        allowed = {f"{address}:{port}", f"localhost:{port}"}
+        if port == 80:
+            allowed.update((address, "localhost"))
+        hosts = self.headers.get_all("Host", [])
+        # A rebound foreign hostname must not read the local run token.
+        if len(hosts) != 1 or hosts[0].lower() not in allowed:
+            self.send_error(403, "Use this server's loopback address and port.")
+            return False
+        return True
 
     def end_headers(self):
         self.send_header("Cache-Control", "no-store")
@@ -370,7 +398,7 @@ class ComparisonHandler(SimpleHTTPRequestHandler):
             return self._reply(200, json.dumps(self.store.config).encode("utf-8"))
         return super().do_GET()
 
-    def do_POST(self):
+    def do_POST(self) -> None:
         if self.path != "/api/results" or self.store is None:
             return self._json_error(404, "Unknown endpoint.")
         origin = self.headers.get("Origin")
@@ -404,7 +432,7 @@ class ComparisonHandler(SimpleHTTPRequestHandler):
         return self._reply(200)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--serve", action="store_true", help="serve the search demo and clustering lab")
     parser.add_argument("--port", type=int, default=8080, help="local server port with --serve")
@@ -442,21 +470,21 @@ def main():
     if args.prepared_data:
         suites = load_prepared_data(data)
     else:
+        # Artifact inspection and serving do not need the GPU/download dependency stack.
+        from cluster import build_comparison_data, require_gpu
+
         require_gpu()
         if args.cloudflare_project:
             ensure_pages_project(args.cloudflare_project)
             publisher = StreamingPagesPublisher(output / "pages", args.cloudflare_project)
-        build_comparison_data(args.input, data, index_ready=publisher)
+        build_comparison_data(args.input, data, publish_index=publisher)
         suites = load_prepared_data(data)
     config = {
         "version": 1, "id": secrets.token_hex(16), "token": secrets.token_hex(24),
         "suites": [{"label": label, "noise": noise, "url": suite["suite_path"]}
                    for label, noise, suite in zip(NOISE_LABELS, NOISE_LEVELS, suites)],
-        "cluster_counts": list(CLUSTER_COUNTS), "cluster_probe_counts": [1, 4, 8],
-        "probe_cluster_counts": [16384], "probe_counts": [1, 2, 3, 4, 6, 8, 10],
-        "quantization_clusters": 16384, "quantization_probes": 4,
+        **comparison_settings(),
         "centroid_setup_repeats": 1000, "centroid_only": args.centroid_only,
-        "codecs": list(CODECS), "k": 1, "query_count": QUERY_COUNT, "repeats": 1,
         "seed": suites[0]["seed"], "results_url": "/api/results",
     }
     output.mkdir(parents=True, exist_ok=True)
@@ -469,8 +497,10 @@ def main():
         return
     if publisher is not None:
         args.hosting_manifest = publisher.finish()
-    configure_network(config, suites, args.hosting_manifest, data)
-    wait_for_assets(config["asset_base_urls"])
+    config.update(configure_network(suites, args.hosting_manifest, data))
+    for item, suite in zip(config["suites"], suites):
+        item["url"] = urljoin(config["assets_base_url"], suite["suite_path"])
+    wait_for_asset_hosts_tls(config["asset_base_urls"])
     store = ResultStore(output, config, dict(zip(NOISE_LABELS, suites)), data)
     (output / "run.json").write_text(json.dumps(store.report["config"], indent=2) + "\n", encoding="utf-8")
     with ThreadingHTTPServer(("127.0.0.1", 0), partial(ComparisonHandler, store=store)) as server:

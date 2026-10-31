@@ -33,11 +33,6 @@ function validateConfig(config) {
   return config;
 }
 
-function verifySuiteIdentity(config, label, suite) {
-  requireValue(suite.id === config.fixture_ids[label],
-    `The ${label} hosted fixture does not match the prepared local data. Upload this run's complete data directory.`);
-}
-
 function buildPlan(config) {
   const values = config.suites.flatMap(noise => paperPlan().map(item => ({ ...item, noise_label: noise.label })));
   let state = config.seed >>> 0;
@@ -95,7 +90,8 @@ async function run() {
     for (const item of config.suites) {
       status(`Loading ${item.label} noise queries…`);
       const suite = await loadSuite(new URL(item.url, configUrl), network);
-      verifySuiteIdentity(config, item.label, suite);
+      requireValue(suite.id === config.fixture_ids[item.label],
+        `The ${item.label} hosted fixture does not match the prepared local data. Upload this run's complete data directory.`);
       requireValue(suite.noise.level === item.noise, 'The prepared suite has the wrong noise level.');
       if (reference) {
         requireValue(suite.truthData.every((id, i) => id === reference.truthData[i]),

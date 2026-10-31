@@ -1,14 +1,24 @@
 import { CODEC_LABELS, CLUSTER_COUNTS, CLUSTER_FETCH_CONCURRENCY, networkPolicy, fetchJson, fetchBytes, loadCentroids, searchVectors } from './retrieval.mjs';
 
 /**
+ * @typedef {import('./retrieval.mjs').Codec} Codec
+ * @typedef {{clusters: number, probes: number, codec: Codec,
+ *   accuracy_only: boolean, memberships: string[]}} PlanEntry
  * @typedef {{mean: number, p95: number}} TimingSummary
+ * @typedef {{url: string, dimensions: number, count: number, metric: string, truth_k: number,
+ *   query_count: number, id: string, noise: {level: number}, queriesData: Float32Array,
+ *   truthData: Uint32Array, indexes: {clusters: number, path: string, url: string}[]}} LoadedSuite
  * @typedef {{repeat: number, query: number, recall: number, targetId: number, resultIds: number[],
  *   candidates: number, bytes: number, selectedClusters: number[], queryMs?: number,
  *   downloads: (Omit<import('./retrieval.mjs').VectorDownload, 'downloadMs'|'retries'> & {downloadMs?: number, retries?: number})[]}} QueryTrial
  * @typedef {import('./retrieval.mjs').CentroidSetup & {probes: number, k: number,
  *   queries: number, repeats: number, recall: number, trials: QueryTrial[], centroidBytes: number,
  *   centroidDownloadMs: TimingSummary, centroidDecodeMs: TimingSummary, bytesPerQuery: number,
- *   candidatesMean: number}} BenchmarkSummary
+ *   candidatesMean: number, metric: 'source-recovery', noise: LoadedSuite['noise'], fixture_id?: string,
+ *   network_mode?: import('./retrieval.mjs').NetworkOptions['networkMode'],
+ *   asset_base_url?: import('./retrieval.mjs').NetworkOptions['assetsBaseUrl'],
+ *   asset_base_urls?: import('./retrieval.mjs').NetworkOptions['assetsBaseUrls'], hosting_bundle_id?: string,
+ *   cluster_fetch_cache: 'force-cache'|'no-store', cluster_fetch_concurrency: number}} BenchmarkSummary
  * @typedef {(BenchmarkSummary & {accuracy_only: true, queryMs?: never}) |
  *   (BenchmarkSummary & {accuracy_only: false, queryMs: TimingSummary})} BenchmarkResult
  */
@@ -17,17 +27,24 @@ export const PAPER_SETTINGS = Object.freeze({
   cluster_counts: CLUSTER_COUNTS, cluster_probe_counts: [1, 4, 8],
   probe_cluster_counts: [16384], probe_counts: [1, 2, 3, 4, 6, 8, 10],
   quantization_clusters: 16384, quantization_probes: 4,
-  codecs: Object.keys(CODEC_LABELS), k: 1, query_count: 10000,
+  codecs: /** @type {Codec[]} */ (Object.keys(CODEC_LABELS)), k: 1, query_count: 10000,
   repeats: 1, centroid_setup_repeats: 1000,
 });
 
+/** @returns {PlanEntry[]} */
 export function paperPlan() {
+  /** @type {Map<string, PlanEntry>} */
   const plan = new Map();
+  /** @param {number} clusters @param {number} probes @param {Codec} codec @param {string} membership */
   function add(clusters, probes, codec, membership) {
     const accuracy_only = membership === 'codecs';
     const key = `${clusters}|${probes}|${codec}|${accuracy_only}`;
-    if (!plan.has(key)) plan.set(key, { clusters, probes, codec, accuracy_only, memberships: [] });
-    plan.get(key).memberships.push(membership);
+    let entry = plan.get(key);
+    if (!entry) {
+      entry = { clusters, probes, codec, accuracy_only, memberships: [] };
+      plan.set(key, entry);
+    }
+    entry.memberships.push(membership);
   }
   for (const clusters of PAPER_SETTINGS.cluster_counts) {
     for (const probes of PAPER_SETTINGS.cluster_probe_counts) add(clusters, probes, 'f16', 'counts');
@@ -37,12 +54,13 @@ export function paperPlan() {
   return [...plan.values()];
 }
 
+/** @returns {PlanEntry[]} */
 export function remaining32kPlan() {
   return [
-    ...[2, 3, 6, 10].map(probes => ({ clusters: 32768, probes, codec: 'f16',
+    ...[2, 3, 6, 10].map(/** @returns {PlanEntry} */ probes => ({ clusters: 32768, probes, codec: 'f16',
       accuracy_only: false, memberships: ['probes'] })),
     { clusters: 32768, probes: 4, codec: 'sq6', accuracy_only: false, memberships: ['codecs', 'default'] },
-    ...['sq8', 'sq4', 'int8', 'pq4'].map(codec => ({ clusters: 32768, probes: 4, codec,
+    ...(/** @type {Codec[]} */ (['sq8', 'sq4', 'int8', 'pq4'])).map(codec => ({ clusters: 32768, probes: 4, codec,
       accuracy_only: true, memberships: ['codecs'] })),
   ];
 }
@@ -53,6 +71,12 @@ const resolveUrl = (path, base = globalThis.location?.href) => new URL(path, bas
 const mean = values => values.reduce((sum, value) => sum + value, 0) / values.length;
 const summary = values => ({ mean: mean(values), p95: [...values].sort((a, b) => a - b)[Math.ceil(values.length * 0.95) - 1] });
 
+/**
+ * @param {string|URL} path
+ * @param {string} expectedId
+ * @param {import('./retrieval.mjs').NetworkOptions} options
+ * @returns {Promise<{version: number, bundle_id: string, asset_base_url: string, asset_base_urls: string[]}>}
+ */
 export async function verifyHostingManifest(path, expectedId, options) {
   const policy = networkPolicy(options);
   requireValue(policy.networkMode === 'internet' && typeof expectedId === 'string' && expectedId.length > 0,
@@ -67,6 +91,7 @@ export async function verifyHostingManifest(path, expectedId, options) {
   return manifest;
 }
 
+/** @param {string|URL} path @param {import('./retrieval.mjs').NetworkOptions} [options] @returns {Promise<LoadedSuite>} */
 export async function loadSuite(path, options) {
   const url = resolveUrl(path);
   const policy = networkPolicy(options);
@@ -114,6 +139,13 @@ export async function loadSuite(path, options) {
     indexes: suite.indexes.map(index => ({ ...index, url: resolveUrl(index.path, url) })) };
 }
 
+/**
+ * @param {import('./retrieval.mjs').Index} index
+ * @param {import('./retrieval.mjs').Codec[]} codecs
+ * @param {import('./retrieval.mjs').NetworkOptions & {
+ *   onProgress?: (progress: {completed: number, total: number, bytes: number}) => void}} [options]
+ * @returns {Promise<{clusters: number, cluster_files: number, cluster_bytes: number, centroid_files: number}>}
+ */
 export async function warmIndexAssets(index, codecs, { onProgress, ...options } = {}) {
   for (const codec of codecs) await loadCentroids(index, codec, options);
   const controller = new AbortController();
@@ -133,7 +165,8 @@ export async function warmIndexAssets(index, codecs, { onProgress, ...options } 
           requireValue(downloaded.bytes === file.bytes,
             'Cluster download byte length does not match manifest.');
           bytes += downloaded.bytes;
-          onProgress?.({ completed: ++completed, total: index.clusters, bytes });
+          completed++;
+          onProgress?.({ completed, total: index.clusters, bytes });
         }
       } catch (error) {
         controller.abort(error);
@@ -150,9 +183,8 @@ export async function warmIndexAssets(index, codecs, { onProgress, ...options } 
  * Query timers exclude centroid loading and shared query/truth setup.
  * Accuracy-only results omit queryMs, including per-trial query/download timings.
  * @param {import('./retrieval.mjs').Index} index
- * @param {{dimensions: number, count: number, metric: string, truth_k: number, query_count: number,
- *   queriesData: Float32Array, truthData: Uint32Array, id: string, noise: {level: number}}} suite
- * @param {import('./retrieval.mjs').NetworkOptions & {codec?: import('./retrieval.mjs').Codec,
+ * @param {LoadedSuite} suite
+ * @param {Omit<import('./retrieval.mjs').NetworkOptions, 'cache'> & {codec?: import('./retrieval.mjs').Codec,
  *   probes?: number, accuracyOnly?: boolean,
  *   onProgress?: (progress: {completed: number, total: number, repeat: number, query: number}) => void,
  *   centroidSetup?: import('./retrieval.mjs').CentroidSetup}} [options]
@@ -161,10 +193,10 @@ export async function warmIndexAssets(index, codecs, { onProgress, ...options } 
 export async function benchmark(index, suite, {
   codec = 'f16', probes = 4,
   accuracyOnly = false, onProgress,
-  networkMode, assetsBaseUrl, assetsBaseUrls, centroidSetup,
+  networkMode, assetsBaseUrl, assetsBaseUrls, signal, centroidSetup,
 } = {}) {
   const k = 1, queryCount = 10000;
-  const policy = networkPolicy({ networkMode, assetsBaseUrl, assetsBaseUrls, cache: accuracyOnly ? 'force-cache' : 'no-store' });
+  const policy = networkPolicy({ networkMode, assetsBaseUrl, assetsBaseUrls, signal, cache: accuracyOnly ? 'force-cache' : 'no-store' });
   requireValue(typeof accuracyOnly === 'boolean', 'Invalid accuracy-only setting.');
   requireValue(index.dimensions === suite.dimensions && index.count === suite.count, 'Suite and index do not match.');
   requireValue(suite.metric === 'source-recovery' && suite.truth_k === 1, 'Invalid benchmark metric.');
@@ -186,6 +218,7 @@ export async function benchmark(index, suite, {
     performance.clearResourceTimings?.();
     const { results, selectedClusters: selected, candidates, queryMs, bytes, downloads } = await searchVectors(index, query,
       { centroids: loaded.centroids, probes, k, accuracyOnly, ...policy }).catch(error => {
+        policy.signal?.throwIfAborted();
         throw new Error(`Query ${queryIndex + 1}/${queryCount}: ${error.message}`, { cause: error });
       });
     const resultIds = results.map(item => item.id);

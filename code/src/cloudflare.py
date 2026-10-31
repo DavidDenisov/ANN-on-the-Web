@@ -13,6 +13,8 @@ import shutil
 import subprocess
 from tempfile import TemporaryDirectory
 
+from paper_settings import NOISE_LABELS
+
 
 BATCH_FILES = 1000
 MAX_FILES = 20_000
@@ -34,7 +36,22 @@ HEADERS = """/*
 """
 
 
-def comparison_assets(prepared_data, cluster_counts=None):
+def _file_digest(path: Path) -> bytes:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for block in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(block)
+    return digest.digest()
+
+
+def _link_or_copy(source: Path, target: Path) -> None:
+    try:
+        os.link(source, target)
+    except OSError:
+        shutil.copy2(source, target)
+
+
+def comparison_assets(prepared_data, cluster_counts=None) -> dict[Path, Path]:
     """Follow only browser runtime dependencies; keep measurements offline."""
     root = Path(prepared_data).resolve(strict=True)
     files = {}
@@ -42,7 +59,7 @@ def comparison_assets(prepared_data, cluster_counts=None):
     if selected is not None and (not selected or not selected.issubset((8192, 16384, 32768))):
         raise ValueError("Only the paper cluster counts can be packaged")
 
-    def add(reference, parent=root):
+    def add(reference, parent=root) -> Path:
         if (not isinstance(reference, str) or not reference or Path(reference).is_absolute()
                 or any(value in reference for value in ("\\", ":", "?", "#"))):
             raise ValueError("Assets must use relative local paths")
@@ -54,14 +71,14 @@ def comparison_assets(prepared_data, cluster_counts=None):
         files[path.relative_to(root)] = path
         return path
 
-    def read_json(path):
+    def read_json(path) -> dict[str, object]:
         value = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(value, dict):
             raise ValueError(f"Expected an object in {path}")
         return value
 
     try:
-        for label in ("small", "medium", "large"):
+        for label in NOISE_LABELS:
             suite_path = add(f"noise-{label}/suite.json")
             suite = read_json(suite_path)
             add(suite["queries"]["file"], suite_path.parent)
@@ -107,17 +124,17 @@ def valid_project_name(value):
     return value
 
 
-def ensure_pages_project(project):
+def ensure_pages_project(project) -> None:
     valid_project_name(project)
     try:
-        subprocess.run(["wrangler", "whoami"], check=True)
+        subprocess.run(["wrangler", "whoami"], check=True, timeout=60)
     except (FileNotFoundError, subprocess.CalledProcessError) as error:
         raise RuntimeError("Install Wrangler and run 'wrangler login' once before uploading") from error
-    projects = subprocess.run(["wrangler", "pages", "project", "list"], check=True, capture_output=True, text=True)
+    projects = subprocess.run(["wrangler", "pages", "project", "list"], check=True, capture_output=True, text=True, timeout=60)
     table = re.sub(r"\x1b\[[0-9;]*m", "", projects.stdout)
     if not re.search(r"(?m)^\s*[│|]\s*" + re.escape(project) + r"\s*[│|]", table):
         subprocess.run(["wrangler", "pages", "project", "create", project,
-                        "--production-branch", "main"], check=True)
+                        "--production-branch", "main"], check=True, timeout=300)
 
 
 def valid_branch_prefix(value):
@@ -126,7 +143,8 @@ def valid_branch_prefix(value):
     return value
 
 
-def prepare_cloudflare_pages(prepared_data, output, project_name, cluster_counts=None, branch_prefix=""):
+def prepare_cloudflare_pages(prepared_data: Path, output: Path, project_name: str,
+                             cluster_counts: list[int] | None = None, branch_prefix: str = "") -> Path:
     """Give each upload batch its own Pages branch and publish one root routing map."""
     project_name = valid_project_name(project_name)
     branch_prefix = valid_branch_prefix(branch_prefix)
@@ -148,11 +166,7 @@ def prepare_cloudflare_pages(prepared_data, output, project_name, cluster_counts
             raise ValueError(f"{relative} is {size / (1024 * 1024):.2f} MiB, above Cloudflare Pages' "
                              "25 MiB per-file limit; clusters are not split. Use a host supporting larger files "
                              "or prepare a clustering whose files fit the limit.")
-        digest = hashlib.sha256()
-        with source.open("rb") as stream:
-            for block in iter(lambda: stream.read(1024 * 1024), b""):
-                digest.update(block)
-        fingerprints[relative.as_posix()] = {"bytes": size, "sha256": digest.hexdigest()}
+        fingerprints[relative.as_posix()] = {"bytes": size, "sha256": _file_digest(source).hex()}
     bundle_id = hashlib.sha256(json.dumps({"schema": 7, "batch_files": BATCH_FILES,
                                           "headers": HEADERS, "files": fingerprints},
                                          sort_keys=True, separators=(",", ":")).encode()).hexdigest()
@@ -172,7 +186,7 @@ def prepare_cloudflare_pages(prepared_data, output, project_name, cluster_counts
                 routes[relative.as_posix()] = base + relative.name
                 locations[relative] = Path(batches[-1]["path"]) / relative.name
     suites = {label: json.loads(files[Path(f"noise-{label}/suite.json")].read_text())
-              for label in ("small", "medium", "large")}
+              for label in NOISE_LABELS}
     manifests = {relative: json.loads(files[relative].read_text()) for relative in root_paths
                  if relative.name == "manifest.json"}
     first = suites["small"]
@@ -208,17 +222,11 @@ def prepare_cloudflare_pages(prepared_data, output, project_name, cluster_counts
                     manifest["cluster_files"].append({"file": routes[local], "bytes": fingerprints[local]["bytes"]})
                 target.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
             else:
-                try:
-                    os.link(source, target)
-                except OSError:
-                    shutil.copy2(source, target)
+                _link_or_copy(source, target)
         for relative in tqdm(binary_paths, desc="Packaging Pages batches", unit="file"):
             target = staged / locations[relative]
             target.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                os.link(files[relative], target)
-            except OSError:
-                shutil.copy2(files[relative], target)
+            _link_or_copy(files[relative], target)
         for directory in [public] + [staged / batch["path"] for batch in batches]:
             (directory / "_headers").write_text(HEADERS, encoding="utf-8")
         text = json.dumps(hosting, indent=2) + "\n"
@@ -235,7 +243,7 @@ def prepare_cloudflare_pages(prepared_data, output, project_name, cluster_counts
     return output
 
 
-def deployment_digest(directory):
+def deployment_digest(directory) -> str:
     """Content hashes let an interrupted upload skip unchanged completed branches."""
     files = sorted(path for path in directory.rglob("*") if path.is_file())
     if not files or len(files) > MAX_FILES:
@@ -245,15 +253,11 @@ def deployment_digest(directory):
         if path.is_symlink() or path.resolve() != path.absolute() or path.stat().st_size > MAX_FILE_BYTES:
             raise ValueError(f"Unsafe path or file above Pages' 25 MiB limit: {path}")
         digest.update(path.relative_to(directory).as_posix().encode("utf-8") + b"\0")
-        content = hashlib.sha256()
-        with path.open("rb") as source:
-            for block in iter(lambda: source.read(1024 * 1024), b""):
-                content.update(block)
-        digest.update(content.digest())
+        digest.update(_file_digest(path))
     return digest.hexdigest()
 
 
-def deploy_cloudflare_pages(deployment, force=False, publish_root=True):
+def deploy_cloudflare_pages(deployment, force=False, publish_root=True) -> dict[str, object]:
     deployment = Path(deployment).resolve(strict=True)
     hosting = json.loads((deployment / "hosting.json").read_text(encoding="utf-8"))
     project = valid_project_name(hosting.get("project_name"))
@@ -302,7 +306,7 @@ def deploy_cloudflare_pages(deployment, force=False, publish_root=True):
             continue
         print(f"Uploading {branch} to Pages project {project}...", flush=True)
         subprocess.run(["wrangler", "pages", "deploy", str(directory), "--project-name", project,
-                        "--branch", branch], check=True)
+                        "--branch", branch], check=True, timeout=1800)
         receipt["completed"][branch] = {"sha256": digest, "base_url": descriptor["base_url"]}
         temporary = deployment / ".deployment.json.tmp"
         temporary.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
@@ -312,13 +316,13 @@ def deploy_cloudflare_pages(deployment, force=False, publish_root=True):
 
 
 class StreamingPagesPublisher:
-    def __init__(self, output, project):
+    def __init__(self, output: Path, project: str) -> None:
         self.output = Path(output).resolve()
         self.project = valid_project_name(project)
         self.hosting = None
         self.output.mkdir(parents=True, exist_ok=False)
 
-    def __call__(self, data, clusters):
+    def __call__(self, data: Path, clusters: int) -> None:
         data = Path(data)
         if self.hosting and str(clusters) in self.hosting["stage_bundle_ids"]:
             raise ValueError(f"Clustering c{clusters} was already uploaded")
@@ -357,33 +361,36 @@ class StreamingPagesPublisher:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)
         text = json.dumps(merged, indent=2) + "\n"
-        (root / "routing.json").write_text(text, encoding="utf-8")
+        routing = root / ".routing.json.tmp"
+        routing.write_text(text, encoding="utf-8")
+        routing.replace(root / "routing.json")
         checkpoint = self.output / ".hosting.json.tmp"
         checkpoint.write_text(text, encoding="utf-8")
         checkpoint.replace(self.output / "hosting.json")
         self.hosting = merged
         # Keep upload receipts and manifests outside the builder's temporary directory.
         shutil.rmtree(stage / "batches")
-        shutil.rmtree(data / f"c{clusters}" / "clusters")
-        print(f"c{clusters} uploaded; generated local cluster payloads cleared.", flush=True)
+        print(f"c{clusters} uploaded; upload staging payloads cleared.", flush=True)
 
-    def finish(self):
+    def finish(self) -> Path:
         if self.hosting is None:
             raise ValueError("No cluster exports were uploaded")
         root = self.output / "root"
-        for label in ("small", "medium", "large"):
+        for label in NOISE_LABELS:
             suite = json.loads((root / f"noise-{label}/suite.json").read_text(encoding="utf-8"))
             if {item["clusters"] for item in suite["indexes"]} != {item["clusters"] for item in self.hosting["indexes"]}:
                 raise ValueError("Cannot publish before every advertised clustering is uploaded")
         digest = deployment_digest(root)
         subprocess.run(["wrangler", "pages", "deploy", str(root), "--project-name", self.project,
-                        "--branch", "main"], check=True)
+                        "--branch", "main"], check=True, timeout=1800)
         receipt = {"version": 1, "project_name": self.project,
                    "completed": {"main": {"sha256": digest, "base_url": self.hosting["asset_base_url"]}}}
-        (self.output / "deployment.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+        temporary = self.output / ".deployment.json.tmp"
+        temporary.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(self.output / "deployment.json")
         return self.output / "hosting.json"
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     prepare = commands.add_parser("prepare", help="package prepared comparison assets")

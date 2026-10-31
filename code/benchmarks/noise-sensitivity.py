@@ -17,12 +17,13 @@ sys.path.insert(0, str(ROOT / "src"))
 from cluster import copy_rows, noisy_queries, prepare_vectors
 
 
-def analyze(clusters=16384):
+def analyze(clusters=16384) -> tuple[dict, list[dict]]:
     prepared = ROOT / "data/benchmark/prepared"
     suite = json.loads((prepared / "noise-large/suite.json").read_text())
     ids = np.fromfile(prepared / "truth.u32.bin", dtype="<u4")
     dimensions = suite["dimensions"]
-    assert len(ids) == suite["query_count"] == 10000 and np.all(np.diff(ids.astype(np.int64)) > 0)
+    if not (len(ids) == suite["query_count"] == 10000 and np.all(np.diff(ids.astype(np.int64)) > 0)):
+        raise ValueError('Expected 10,000 sorted distinct source IDs')
     shards = [{**s, "path": ROOT / "data/wikipedia" / Path(s["name"]).stem / "vectors.npy"}
               for s in suite["source"]["shards"]]
     raw = np.empty((len(ids), dimensions), dtype=np.float32)
@@ -37,7 +38,8 @@ def analyze(clusters=16384):
     for label, alpha in (("small", .05), ("medium", .15), ("large", .4)):
         saved = np.fromfile(prepared / f"noise-{label}/queries.f32.bin", dtype="<f4").reshape(base.shape)
         generated = noisy_queries(raw, alpha, suite["seed"])
-        assert np.array_equal(saved, generated), f"Saved {label} queries do not match their source vectors"
+        if not np.array_equal(saved, generated):
+            raise ValueError(f"Saved {label} queries do not match their source vectors")
 
     sampling_seed = 20261027
     rng = np.random.default_rng(sampling_seed)
@@ -47,8 +49,10 @@ def analyze(clusters=16384):
     partners += partners >= positions
     pair_cosines = np.clip(np.sum(x * base[partners], axis=1), -1, 1)
     pair_distances = np.linalg.norm(x - base[partners], axis=1)
-    assert np.all(ids[positions] != ids[partners])
-    assert np.allclose(pair_distances**2, 2 * (1 - pair_cosines), atol=1e-12)
+    if not np.all(ids[positions] != ids[partners]):
+        raise ValueError('Sampled partner IDs must differ from source IDs')
+    if not np.allclose(pair_distances**2, 2 * (1 - pair_cosines), atol=1e-12):
+        raise ValueError('Random-pair distances do not match their cosines')
     random_pairs = {"samples": len(x),
                     "sampling": "Source and different donor passages from the uniform 10,000-passage corpus sample; IDs are source_ids and partner_ids.",
                     "cosine_mean": float(pair_cosines.mean()),
@@ -57,7 +61,8 @@ def analyze(clusters=16384):
                     "l2_distance_median": float(np.median(pair_distances))}
     tangent = base[partners] - np.sum(base[partners] * x, axis=1, keepdims=True) * x
     lengths = np.linalg.norm(tangent, axis=1, keepdims=True)
-    assert np.all(lengths > 1e-8), "A donor is indistinguishable from its source"
+    if not np.all(lengths > 1e-8):
+        raise ValueError('A donor is indistinguishable from its source')
     tangent /= lengths
 
     manifest_path = prepared / f"c{clusters}/manifest.json"
@@ -72,7 +77,8 @@ def analyze(clusters=16384):
     _, assigned = index.search(np.ascontiguousarray(decoded[positions]), 1)
     assigned = assigned[:, 0]
     _, clean = index.search(np.ascontiguousarray(x, dtype=np.float32), 1)
-    assert np.array_equal(clean[:, 0], assigned), "Clean queries changed their assigned cluster"
+    if not np.array_equal(clean[:, 0], assigned):
+        raise ValueError('Clean queries changed their assigned cluster')
 
     cases, samples = [], []
     for alpha in (0, .05, .15, .25, .4, .6, .8, 1.0):
@@ -82,9 +88,11 @@ def analyze(clusters=16384):
         # Change direction while matching each Gaussian query's source angle exactly.
         corpus_directed = cosine[:, None] * x + np.sqrt(np.maximum(0, 1 - cosine**2))[:, None] * tangent
         for kind, query in (("gaussian-l2", gaussian), ("corpus-directed-matched-angle", corpus_directed)):
-            assert np.allclose(np.linalg.norm(query, axis=1), 1, atol=1e-7)
+            if not np.allclose(np.linalg.norm(query, axis=1), 1, atol=1e-7):
+                raise ValueError('Perturbed queries are not normalized')
             cosines = np.clip(np.sum(query * x, axis=1), -1, 1)
-            assert np.allclose(cosines, cosine, atol=1e-7)
+            if not np.allclose(cosines, cosine, atol=1e-7):
+                raise ValueError('Perturbation does not preserve the matched source angle')
             angles = np.degrees(np.arccos(cosines))
             distances = np.linalg.norm(query - x, axis=1)
             _, selected = index.search(np.ascontiguousarray(query, dtype=np.float32), 8)
@@ -108,10 +116,12 @@ def analyze(clusters=16384):
                                 "source_cluster": int(assigned[i]),
                                 **{f"covered_{p}": bool(hits[i, :p].any()) for p in (1, 4, 8)}})
 
-    original = list(csv.DictReader((ROOT / "data/benchmark/retrieval/summary.csv").open()))
+    with (ROOT / "data/benchmark/retrieval/summary.csv").open(newline="", encoding="utf-8") as stream:
+        original = list(csv.DictReader(stream))
     original = [r for r in original if r["clusters"] == str(clusters) and r["codec"] == "f16"
                 and "counts" in r["checks"].split(";") and r["probes"] in ("1", "4", "8")]
-    assert len(original) == 9
+    if len(original) != 9:
+        raise ValueError('Expected nine retained source recovery configurations')
     full_recovery = [{"alpha": float(r["noise_level"]), "probes": int(r["probes"]),
                       "queries": int(r["queries"]), "source_recovery": float(r["source_recovery"])}
                      for r in original]
@@ -139,7 +149,9 @@ if __name__ == "__main__":
         raise FileExistsError(f"Refusing to overwrite {output}")
     report, samples = analyze(args.clusters)
     output.mkdir(parents=True)
-    (output / "summary.json").write_text(json.dumps(report, indent=2) + "\n")
+    temporary = output / ".summary.json.tmp"
+    temporary.write_text(json.dumps(report, indent=2) + "\n")
+    temporary.replace(output / "summary.json")
     for name, rows in (("sensitivity.csv", report["cases"]), ("samples.csv", samples)):
         with (output / name).open("x", newline="") as stream:
             writer = csv.DictWriter(stream, fieldnames=list(rows[0]))

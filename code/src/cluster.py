@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Build Wikipedia indexes and noisy-passage comparison datasets."""
 
+from collections.abc import Callable, Iterator
 import gzip
 import hashlib
 import json
@@ -11,21 +12,24 @@ import shutil
 import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import TypedDict
 
 import faiss
 import numpy as np
 from tqdm import tqdm
 
-from download_dataset import DEFAULT_OUTPUT as DEFAULT_INPUT, DIMENSIONS, validate_shard
+from download_dataset import validate_shard
+from paper_settings import CODECS, CLUSTER_COUNTS, CORPUS_COUNT, DIMENSIONS, NOISE_LABELS, NOISE_LEVELS, QUERY_COUNT, TRAINING_SAMPLE_SIZE
 
 
-CODECS = ("f16", "sq8", "sq6", "sq4", "int8", "pq4")
-CLUSTER_COUNTS = (8192, 16384, 32768)
-CORPUS_COUNT = 35_167_920
-TRAINING_SAMPLE_SIZE = 2_097_152
-QUERY_COUNT = 10_000
-NOISE_LEVELS = (0.05, 0.15, 0.4)
 BATCH_SIZE = 65_536
+
+
+class Shard(TypedDict):
+    name: str
+    offset: int
+    count: int
+    path: Path
 
 
 def require_gpu() -> int:
@@ -50,7 +54,7 @@ def prepare_vectors(values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return stored, decoded
 
 
-def load_shards(source: Path) -> tuple[dict, list[dict], int]:
+def load_shards(source: Path) -> tuple[dict, list[Shard], int]:
     """Freeze and validate the complete downloaded corpus before reading vectors."""
     manifest = json.loads((source / "manifest.json").read_text(encoding="utf-8"))
     names = manifest.get("shards")
@@ -79,7 +83,7 @@ def load_shards(source: Path) -> tuple[dict, list[dict], int]:
     return manifest, shards, offset
 
 
-def stream_vectors(shards: list[dict]):
+def stream_vectors(shards: list[Shard]) -> Iterator[tuple[int, np.ndarray, np.ndarray]]:
     for shard in shards:
         values = np.load(shard["path"], mmap_mode="r", allow_pickle=False)
         for start in range(0, shard["count"], BATCH_SIZE):
@@ -142,12 +146,12 @@ def pack_codes(codes: np.ndarray, bits: int) -> bytes:
 
 
 def write_gzip(path: Path, payload: bytes) -> None:
-    with path.open("wb") as output:
-        with gzip.GzipFile(filename="", fileobj=output, mode="wb", mtime=0) as compressed:
-            compressed.write(payload)
+    with (path.open("wb") as output,
+          gzip.GzipFile(filename="", fileobj=output, mode="wb", mtime=0) as compressed):
+        compressed.write(payload)
 
 
-def cluster_and_save(source: Path, output: Path, clusters: int, seed: int) -> dict:
+def cluster_and_save(source: Path, output: Path, clusters: int, seed: int) -> dict[str, object]:
     """Write one of the paper's three full-corpus indexes."""
     source, output = Path(source), Path(output)
     if output.exists():
@@ -212,11 +216,11 @@ def cluster_and_save(source: Path, output: Path, clusters: int, seed: int) -> di
         for cid in tqdm(range(clusters), desc="Compressing clusters", unit="cluster", leave=False):
             raw_path = raw / f"{cid}.bin"
             target = staged / "clusters" / f"cluster_{cid}.bin.gz"
-            with target.open("wb") as output_file:
-                with gzip.GzipFile(filename="", fileobj=output_file, mode="wb", mtime=0) as compressed:
-                    if raw_path.exists():
-                        with raw_path.open("rb") as source_file:
-                            shutil.copyfileobj(source_file, compressed)
+            with (target.open("wb") as output_file,
+                  gzip.GzipFile(filename="", fileobj=output_file, mode="wb", mtime=0) as compressed):
+                if raw_path.exists():
+                    with raw_path.open("rb") as source_file:
+                        shutil.copyfileobj(source_file, compressed)
             raw_path.unlink(missing_ok=True)
         manifest = {
             "version": 1, "dimensions": dimensions, "count": count, "clusters": clusters,
@@ -238,7 +242,7 @@ def cluster_and_save(source: Path, output: Path, clusters: int, seed: int) -> di
     return manifest
 
 
-def copy_rows(shards, positions, target, description):
+def copy_rows(shards: list[Shard], positions: np.ndarray, target: np.ndarray, description: str) -> None:
     """Read sorted snapshot ordinals into an aligned, bounded-memory destination."""
     with tqdm(total=len(positions), desc=description, unit="passage", leave=False) as progress:
         for shard in shards:
@@ -270,15 +274,19 @@ def noisy_queries(values: np.ndarray, noise: float, seed: int) -> np.ndarray:
     return (perturbed / norms).astype("<f4")
 
 
-def build_comparison_data(source, output, index_ready=None):
-    """Build the paper's fixed corpus, indexes and three noise suites."""
+def build_comparison_data(source: Path, output: Path,
+                          publish_index: Callable[[Path, int], None] | None = None) -> list[dict]:
+    """Build the paper suites, releasing local cluster payloads after each successful publication.
+
+    Without publish_index, retain every cluster payload for offline packaging.
+    """
     source, output = Path(source), Path(output)
     if output.exists():
         raise FileExistsError(f"Refusing to overwrite {output}")
-    if index_ready is not None and not callable(index_ready):
-        raise ValueError("index_ready must be callable")
+    if publish_index is not None and not callable(publish_index):
+        raise ValueError("publish_index must be callable")
     seed = secrets.randbelow(2**31)
-    noise_levels = tuple(zip(("small", "medium", "large"), NOISE_LEVELS))
+    noise_levels = tuple(zip(NOISE_LABELS, NOISE_LEVELS))
     require_gpu()
     original, shards, count = load_shards(source)
     query_noises = [{"kind": "gaussian-l2", "level": noise}
@@ -335,8 +343,9 @@ def build_comparison_data(source, output, index_ready=None):
             suites.append(suite)
         for clusters in tqdm(CLUSTER_COUNTS, desc="Cluster-count comparisons", unit="index"):
             cluster_and_save(source, staged / f"c{clusters}", clusters, seed)
-            if index_ready is not None:
-                index_ready(staged, clusters)
+            if publish_index is not None:
+                publish_index(staged, clusters)
+                shutil.rmtree(staged / f"c{clusters}" / "clusters")
         # shortcut: use one writer per destination, as with the existing exporters.
         if output.exists():
             raise FileExistsError(f"Refusing to overwrite {output}")

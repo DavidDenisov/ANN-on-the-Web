@@ -81,7 +81,7 @@ self.onmessage = async ({ data }) => {
   }
   if (!['init', 'search'].includes(data.type) || !Number.isSafeInteger(data.requestId)) return;
   active?.controller.abort();
-  const job = { id: data.requestId, type: data.type, controller: new AbortController() };
+  const job = { id: data.requestId, controller: new AbortController() };
   active = job;
   let stage = 'index';
   try {
@@ -89,18 +89,18 @@ self.onmessage = async ({ data }) => {
       index = undefined;
       if (typeof data.indexUrl !== 'string' || !data.indexUrl) throw new Error('Enter the URL of a prepared search manifest.');
       send(job, 'status', { message: 'Loading passage index…' });
-      const [loaded] = await Promise.all([
+      const [loadedIndex] = await Promise.all([
         (async () => {
-          const loaded = await loadSearchIndex(data.indexUrl, { signal: job.controller.signal });
+          const { index: nextIndex } = await loadSearchIndex(data.indexUrl, { signal: job.controller.signal });
           checkCanceled(job);
-          if (loaded.index.dimensions !== 384) throw new Error('This client needs a 384-dimensional all-MiniLM-L6-v2 index.');
-          await loadSearchCentroids(loaded.index, data.codec ?? 'sq6', { signal: job.controller.signal });
-          return loaded;
+          if (nextIndex.dimensions !== 384) throw new Error('This client needs a 384-dimensional all-MiniLM-L6-v2 index.');
+          await loadSearchCentroids(nextIndex, data.codec ?? 'sq6', { signal: job.controller.signal });
+          return nextIndex;
         })(),
         initializeModel(job),
       ]);
       checkCanceled(job);
-      index = loaded.index;
+      index = loadedIndex;
       send(job, 'ready', { count: index.count, clusters: index.clusters, codecs: Object.keys(index.centroids),
         threads: inferenceThreads, crossOriginIsolated });
       return;

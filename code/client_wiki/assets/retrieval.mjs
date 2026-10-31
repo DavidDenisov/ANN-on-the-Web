@@ -3,9 +3,11 @@
  * @typedef {{networkMode?: 'internet', assetsBaseUrl?: string, assetsBaseUrls?: string[],
  *   signal?: AbortSignal, cache?: 'force-cache'|'no-store'}} NetworkOptions
  * @typedef {{file: string, bytes: number, rmse: number}} CentroidDescriptor
+ * @typedef {{format: string, count: number, batch_size: number, pattern: string,
+ *   files_per_deployment: number, base_urls: string[]}} PassageMetadata
  * @typedef {{url: string, dimensions: number, count: number, clusters: number, record_bytes: number,
  *   cluster_sizes: number[], cluster_files: {file: string, bytes: number}[],
- *   centroids: Record<Codec, CentroidDescriptor>}} Index
+ *   centroids: Record<Codec, CentroidDescriptor>, embedding_model?: string, metadata?: PassageMetadata}} Index
  * @typedef {{buffer: ArrayBuffer, bytes: number, downloadMs: number, retries: number,
  *   requestedUrl: string, resolvedUrl: string}} AssetDownload
  * @typedef {{id: number, distance: number}} SearchMatch
@@ -37,6 +39,7 @@ const scalarBits = { sq8: 8, sq6: 6, sq4: 4 };
 export const CLUSTER_FETCH_CONCURRENCY = 16;
 
 
+/** @param {string|URL} value @param {string|string[]} [base] @returns {string} */
 export function internetAssetUrl(value, base) {
   const url = new URL(value);
   const host = url.hostname.replace(/^\[|\]$/g, '').toLowerCase().replace(/\.$/, '');
@@ -61,12 +64,15 @@ export function internetAssetUrl(value, base) {
         'The Internet asset base URL must end with / and have no query or fragment.');
       return root;
     });
-    requireValue(roots.some(root => url.origin === root.origin && url.pathname.startsWith(root.pathname)),
+    const pathname = decodeURIComponent(url.pathname);
+    requireValue(!pathname.split('/').includes('..')
+      && roots.some(root => url.origin === root.origin && pathname.startsWith(decodeURIComponent(root.pathname))),
       'An asset URL escapes the configured Internet asset directory.');
   }
   return url.href;
 }
 
+/** @param {NetworkOptions} [options] @returns {NetworkOptions} */
 export function networkPolicy({ networkMode, assetsBaseUrl, assetsBaseUrls, signal, cache = 'no-store' } = {}) {
   requireValue(networkMode === undefined || networkMode === 'internet', 'Invalid network measurement mode.');
   requireValue(cache === 'no-store' || cache === 'force-cache', 'Invalid fetch cache policy.');
@@ -136,11 +142,13 @@ export async function fetchBytes(url, options) {
   }
 }
 
+/** @param {string} url @param {NetworkOptions} [options] */
 export async function fetchJson(url, options) {
   const response = await fetchAsset(url, networkPolicy(options));
   try {
     return await response.json();
   } catch (error) {
+    options?.signal?.throwIfAborted();
     throw new Error(`Invalid JSON asset: ${url}. ${error.message}`, { cause: error });
   }
 }
@@ -172,8 +180,16 @@ async function decodeCentroids(compressed, codec, dimensions, clusters, url) {
   const length = dimensions * clusters;
   const bits = scalarBits[codec];
   const blocks = dimensions / 8;
-  const expected = codec === 'f16' ? length * 2 : bits ? dimensions * 8 + length * bits / 8
-    : codec === 'int8' ? dimensions * 4 + length : 4 + dimensions * 64 + clusters * blocks / 2;
+  let expected;
+  if (codec === 'f16') {
+    expected = length * 2;
+  } else if (bits) {
+    expected = dimensions * 8 + length * bits / 8;
+  } else if (codec === 'int8') {
+    expected = dimensions * 4 + length;
+  } else {
+    expected = 4 + dimensions * 64 + clusters * blocks / 2;
+  }
   requireValue(buffer.byteLength === expected, `Invalid ${codec} centroid byte length.`);
   const view = new DataView(buffer);
   const minimum = bits ? new Float32Array(dimensions) : null;
