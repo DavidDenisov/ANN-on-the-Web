@@ -149,13 +149,13 @@ With FP16 centroids, four probes recover over $98\%$ of source passages at all t
 
 \input{figures/large-count-table}
 
-At 8k/FP16, increasing from two to five probes raises source recovery from $95.4\%$ to $98.7\%$, mean retrieval time from $204$ to $518$~ms, and vector payload from $6.88$ to $16.98$~MB. Figure~\ref{fig:recovery-time} compares recovery and observed retrieval time; a companion payload plot is supplied with the source.
+At 8k, two to five probes transfer $6.88$--$16.98$~MB/query with $95.4$--$98.7\%$ recovery. Figure~\ref{fig:recovery-bytes} reports gzipped vector payload, excluding startup and text, because file bytes are unaffected by network conditions during multi-day runs. Observed retrieval time scaled approximately linearly with payload over this range.
 \begin{figure}[tb]
 \centering
-\includegraphics[width=\columnwidth]{recovery-time.pdf}
-\Description{Source recovery@1 in percent against mean observed retrieval time in milliseconds per query for 8,192, 16,384 and 32,768 clusters with FP16 centroids and noise magnitude 0.4. Sixteen configurations are shown: probes 2, 3, 4 and 5 at 8k, and six settings each at 16k and 32k. The 8k four-probe measurement is retained from the original run. The recovery axis spans 93.5--99.5 percent. Small markers and probe labels distinguish the curves. Shaded bands join pointwise 95 percent Wilson intervals for recovery, not timing variation. Retrieval excludes startup, embedding and result-text loading.}
-\caption{Recovery versus retrieval time (FP16, $\alpha=0.4$; $10{,}000$ queries/setting). Shading joins pointwise $95\%$ Wilson intervals; labels mark probes.}
-\label{fig:recovery-time}
+\includegraphics[width=\columnwidth]{recovery-bytes.pdf}
+\Description{Source recovery@1 in percent against mean gzipped vector payload in decimal megabytes per query for 8,192, 16,384 and 32,768 clusters with FP16 centroids and noise magnitude 0.4. Sixteen configurations are shown: probes 2, 3, 4 and 5 at 8k, and six settings each at 16k and 32k. The 8k four-probe measurement is retained from the original run. The recovery axis spans 93.5--99.5 percent. Small markers and probe labels distinguish the curves. Shaded bands join pointwise 95 percent Wilson intervals for recovery, not payload variation. Payload excludes startup assets, result text and HTTP headers. This metric is fixed by the selected files and unaffected by network conditions over long runs.}
+\caption{Recovery versus vector payload (FP16, $\alpha=0.4$; $10{,}000$ queries/setting). Shading joins pointwise $95\%$ Wilson intervals; labels mark probes.}
+\label{fig:recovery-bytes}
 \end{figure}
 
 \subsection{Centroid loading costs}
