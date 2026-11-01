@@ -11,12 +11,6 @@ The paper uses:
 - `large-count-table.tex` and rows: the three four-probe count settings. Historical count/probe measurements remain in `../results/retrieval-summary.csv`.
 - `large-compression-table.tex` and rows: all six centroid formats at 32k and four probes.
 
-The older `screenshots/search-full.png` and `screenshots/lab-full.png` are historical October 26 captures. They are not used in the current paper; the earlier lab allowed a ten-query illustration. The obsolete stylized search/lab panels have been removed from the active figure set.
-
-The superseded October 30 desktop PNGs are archived locally and are not included in this repository.
-
 `probe-large.pdf` retains the earlier 32k FP16 probe sweep with median latency/interquartile band and source recovery with shaded 95% Wilson intervals. It remains available as a supporting asset; the current Figure 4 uses `recovery-bytes.pdf`.
 
 `probe-32k-summary.csv` preserves timing quartiles. `../results/recovery-intervals.csv` and `review-derived.tex` are computed from retained exact counts. `cluster-distribution.json` records live-manifest provenance; its compressed size-field inputs reproduce the quantiles and conservative four-probe byte bound offline.
-
-The four `*-detail.png` close-ups are retained as earlier assets and are not used in the paper.
