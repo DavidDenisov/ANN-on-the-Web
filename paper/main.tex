@@ -27,7 +27,7 @@
 \begin{document}
 
 \begin{abstract}
-We demonstrate browser-based approximate nearest neighbour (ANN) search over $35.2$ million English Wikipedia passages hosted on a static CDN. The browser embeds questions locally, uses inverted file (IVF) routing to select vector clusters for parallel download, ranks their vectors, and fetches text for the top results. This avoids a full index download or an application search server. Visitors submit questions and inspect passages, timings, and download costs; a companion lab measures the recovery--bandwidth trade-off. On a desktop with primed CDN caches, at 32k clusters, SQ6 centroids, and four probes, a repeated fixed question returning ten passages averages $130.3$~ms to worker reply, including embedding and text loading, with $3.25$~MB of compressed payload. Worker startup averages $2.46$~s. At the same settings, synthetic perturbations of L2 magnitude $0.4$ yield $98.1\%$ source recovery@1; this is not real-question recall. Queries and embeddings stay local, while file requests can reveal access patterns.
+We demonstrate browser-based approximate nearest neighbour (ANN) search over $35.2$ million English Wikipedia passages hosted on a static CDN. The browser embeds questions locally, uses inverted file (IVF) routing to select vector clusters for parallel download, ranks their vectors, and fetches text for the top results. This avoids a full index download or an application search server. Visitors submit questions and inspect passages, timings, and download costs; a companion lab measures the recovery--bandwidth trade-off. On a desktop with primed CDN caches, at 32k clusters, SQ6 centroids, and four probes, a repeated fixed question returning ten passages averages $130.3$~ms to worker reply, including embedding and text loading but excluding startup, with $3.25$~MB of compressed payload. Worker startup averages $2.46$~s. At the same settings, isotropic perturbations of L2 norm $0.4$ yield $98.1\%$ source recovery@1; this is not real-question recall. Queries and embeddings stay local, while file requests can reveal access patterns.
 \end{abstract}
 
 \ccsdesc[500]{Information systems~Similarity search}
@@ -47,24 +47,24 @@ We demonstrate browser-based approximate nearest neighbour (ANN) search over $35
 
 
 \section{Introduction}
-Semantic search on a static document collection usually requires a search service or a large local index. We demonstrate browser ANN over $35.2$ million passages without either: local inverted file (IVF) routing selects remote cluster files for parallel download. The probe count controls the number of clusters fetched and ranked.
+Semantic search on a static document collection usually requires a search service or a large local index. We demonstrate browser ANN over $35.2$ million passages without either: local inverted file (IVF) routing~\cite{product-quantization} selects remote cluster files for parallel download. The probe count controls the number of clusters fetched and ranked.
 
-Our contribution is a static-Web deployment and an interactive view of established ANN techniques: search exposes per-question costs, while the lab isolates routing and centroid compression. The FP16 vectors occupy about $27$~GB; each query transfers only selected clusters and result text from Cloudflare Pages.
+We demonstrate a static-Web deployment of established ANN techniques: search exposes per-question costs, while the lab isolates routing and centroid compression. FP16 vectors occupy about $27$~GB per index layout; each query fetches selected clusters and result text from Cloudflare Pages.
 
 \subsection{Related work}
-SPANN~\cite{spann} keeps centroids in memory and posting lists on disk; we apply this partitioned-search pattern to static HTTP files. Tiptoe~\cite[Sections~3--5]{Tiptoe} also embeds queries and selects clusters locally, but its servers compute encrypted similarities over the corpus to hide cluster selection, followed by private URL retrieval. Our client downloads selected plaintext vector files and ranks locally, trading cryptographic privacy for static serving. Selective loading also appears in \href{https://pagefind.app/}{Pagefind}'s lexical search and \href{https://github.com/phiresky/sql.js-httpvfs}{sql.js-httpvfs}'s range-based database reads.
+SPANN~\cite{spann} keeps centroids in memory and posting lists on disk; our browser instead fetches static HTTP files. DiskANN~\cite{DiskANN} uses graph traversal. Tiptoe~\cite[Sections~3--5]{Tiptoe} selects clusters locally, hides that selection through encrypted server-side similarities, and privately retrieves result URLs. Our client downloads plaintext vectors and ranks locally, trading cryptographic privacy for static serving. Selective loading also appears in \href{https://pagefind.app/}{Pagefind}'s lexical search and the HTTP database chunks of \href{https://github.com/phiresky/sql.js-httpvfs}{sql.js-httpvfs}.
 
-MeMemo~\cite{MeMemo} and WebANNS~\cite{WebANNS} use browser-local HNSW in RAM and IndexedDB; DiskANN~\cite{DiskANN} uses graph traversal. WebANNS evaluates up to $480{,}000$ passages. Our larger remote corpus uses parallel cluster reads; the ANN algorithm is established.
+MeMemo~\cite{MeMemo} and WebANNS~\cite{WebANNS} use browser-local HNSW in RAM and IndexedDB. WebANNS evaluates up to $480{,}000$ passages. Our larger remote corpus uses parallel cluster reads; the ANN algorithm is established.
 
 \section{Demonstration scenario}
 \label{sec:demo}
 The two public pages use the same Wikipedia passage collection.
 
 \paragraph{Wikipedia search.}
-Visitors enter a question or other text and receive ranked passages with links to Wikipedia articles. Defaults are 32k clusters, SQ6 centroids, four probes, and ten results. Controls offer three cluster counts, six centroid formats, and $1$--$100$ probes. The page reports embedding, centroid loading, retrieval, and text-loading times alongside vector downloads. The presenter first runs the example question in Figure~\ref{fig:search-demo}, compares one and four probes, and inspects changed passages and byte counts. Visitors then try their own questions; these examples illustrate behaviour, not relevance scores. We keep the walkthrough to one or four probes to limit downloads; queries can be cancelled.
+Visitors enter questions or text and receive ranked passages linked to Wikipedia. Defaults are 32k clusters, SQ6 centroids, four probes, and ten results. Controls offer three cluster counts, six centroid formats, and $1$--$100$ probes. The page reports embedding, centroid-loading, retrieval and text-loading times, and vector downloads. The presenter compares one and four probes for the example question (Figure~\ref{fig:search-demo}), examining changed passages and bytes. Visitors then try their questions; examples illustrate behaviour, not relevance scores. We keep the walkthrough to one or four probes to limit downloads; queries can be cancelled.
 
 \paragraph{Clustering lab.}
-The supplied lab (Figure~\ref{fig:lab-demo}) offers noise presets and separate checks for cluster count, probes, and centroid format. Visitors select $1$--$10{,}000$ precomputed perturbed-passage queries per configuration (default $10$) and can cancel runs. Short runs uniformly sample a shared subset; small samples illustrate behaviour. Paper measurements use all $10{,}000$ queries, excluding embedding. Probe and compression checks use 16k clusters; the paper adds a 32k supplement. Full checks can take hours and transfer hundreds of GB. At the poster, visitors try short checks and interpret retained tables and the probe plot.
+The lab (Figure~\ref{fig:lab-demo}) offers noise presets and checks for cluster count, probes and centroid format. Visitors select $1$--$10{,}000$ precomputed perturbed-passage queries per configuration (default $10$) and can cancel runs. Short runs uniformly sample a shared subset and illustrate behaviour; paper measurements use all $10{,}000$ queries, excluding embedding. Probe and compression checks use 16k clusters; the paper adds a 32k supplement. Full checks can take hours and transfer hundreds of GB. At the poster, visitors try short checks and interpret retained tables and plots.
 
 \begin{figure*}[t]
 \begin{minipage}[t]{\columnwidth}
@@ -77,15 +77,15 @@ The supplied lab (Figure~\ref{fig:lab-demo}) offers noise presets and separate c
 \begin{minipage}[t]{\columnwidth}
 
 \centering
-\includegraphics[width=\columnwidth]{screenshots/lab-desktop.jpg}
-\Description{Current lab interface showing the query-count control, download warning and populated comparison results from a short illustrative run.}
-\caption{Lab after a $10$-query-per-setting illustration, separate from paper measurements. Typography is enlarged for print.}
+\includegraphics[width=\columnwidth,height=0.8333\columnwidth,keepaspectratio,trim=395bp 150bp 10bp 155bp,clip]{screenshots/lab-desktop.jpg}
+\Description{Clustering-lab cluster-count table cropped from the current interface, showing recovery, timing and download results from ten queries per setting. This short run illustrates the interface and is separate from the paper measurements.}
+\caption{Lab table after a $10$-query-per-setting illustration; timings are not comparable with Table~\ref{tab:latency-table}. Typography is enlarged for print.}
 \label{fig:lab-demo}
 \end{minipage}
 \end{figure*}
 
 \paragraph{Public access.}
-The onsite setup is a laptop running Chromium with Internet access and WebAssembly, plus a poster QR code for visitors' browsers. If connectivity fails, saved screenshots and retained plots support a narrated walkthrough without live search. The supplied source includes the client, builders, figures, compact measurements, and self-hosting instructions.
+The presenter will preload the model and centroids on a Chromium laptop with Internet access and WebAssembly. A poster QR code supports visitor access; mobile performance is unvalidated. For slow networks or incompatible browsers, saved screenshots and retained plots support a narrated walkthrough. The supplied source includes the client, builders, figures, compact measurements, and self-hosting instructions.
 
 
 \section{Method outline}
@@ -97,7 +97,7 @@ For queries, Transformers.js~\cite{transformersjs} loads the Xenova ONNX convers
 
 
 \paragraph{Index preparation.}
-We train $C$ centroids with Faiss $k$-means~\cite{Faiss}, using $20$ iterations on about $2.1$ million uniformly sampled passages. We assign each passage to its nearest centroid and store its ID and FP16 vector in that centroid's gzipped file. Centroids are published in FP16 and compressed formats; SQ6 uses six-bit scalar quantisation per component. Passage vectors remain FP16, occupying about $27$~GB before compression.
+We train $C$ centroids with Faiss $k$-means~\cite{Faiss}, using $20$ iterations on about $2.1$ million uniformly sampled passages. We assign each passage to its nearest centroid and store its ID and FP16 vector in that centroid's gzipped file. Centroids are published in FP16 and compressed formats; SQ6 uses six-bit scalar quantisation per component. Passage vectors remain FP16, occupying about $27$~GB per index layout before compression.
 
 \paragraph{Result text.}
 Brotli files hold $500$ contiguous passage IDs each, except the last. These text batches are shared across cluster counts. The browser fetches result batches and keeps decoded text in an $8$~MiB cache.
@@ -109,8 +109,8 @@ The $70{,}336$ text files use $71$ branch deployments; vectors and centroids use
 \begin{figure}[tb]
 \centering
 \includegraphics[width=0.85\columnwidth]{architecture.pdf}
-\Description{Step zero fetches and initializes the model and centroid files once, before query processing. The question then passes through five search steps: embedding the query, selecting clusters to probe by their centroids' L2 distances, fetching the selected cluster files, renormalising decoded passage vectors and ranking them by L2 distance to the query, and fetching text to display the top results. Arrows connect these steps. Three download arrows point from static CDN files into the browser: startup assets at initialization, passage IDs and FP16 vectors at the cluster-fetch step, and result-text batches at the final step. Loaded startup assets are reused across queries. Query text and embeddings stay local and are not uploaded.}
-\caption{Local query embedding and ranking, with model and centroid downloads at startup and selective vector and text downloads per query.}
+\Description{Step zero fetches and initializes the model, WebAssembly runtime and centroid files once, before query processing. The question then passes through five search steps: embedding the query, selecting clusters to probe by their centroids' L2 distances, fetching the selected cluster files, renormalising decoded passage vectors and ranking them by L2 distance to the query, and fetching text to display the top results. Arrows connect these steps. Three download arrows point from static CDN files into the browser: startup assets at initialization, passage IDs and FP16 vectors at the cluster-fetch step, and result-text batches at the final step. Loaded startup assets are reused across queries. Query text and embeddings stay local and are not uploaded.}
+\caption{Local query embedding and ranking, with model, runtime and centroid downloads at startup and selective vector and text downloads per query.}
 \label{fig:method}
 \end{figure}
 
@@ -126,7 +126,7 @@ Configurations share \BenchmarkQueryCount{} uniformly sampled distinct source pa
 On $1{,}000$ sources, mean query-source L2 displacement is $0.378$, or $55.5\%$ of the mean nearest-neighbour distance ($0.681$) from an exact full-corpus scan excluding self matches. This controlled test exercises IVF boundary routing; isotropic passage noise does not model the question--passage distribution gap.
 
 \paragraph{Metric.}
-\textbf{Source recovery@1} is the fraction of perturbed queries whose source ranks first. Noise can favour another passage even in exact search; the plateau is not an ANN recall ceiling. Real-question recall@10, relevance, and q8 query-encoder effects remain unevaluated. For SQ6 at four probes, the $95\%$ Wilson interval~\cite{wilson1927} is $[\DefaultRecoveryLow{},\DefaultRecoveryHigh{}]\%$ ($9{,}806/10{,}000$), describing uncertainty under this synthetic protocol.
+\textbf{Source recovery@1} measures how often a perturbed query ranks its source first. Exact search can favour another passage, so recovery is not ANN recall. Exact neighbours for these noisy queries, real-question relevance/recall@10, and q8 question-encoder effects are unmeasured. For SQ6/four probes, the $95\%$ Wilson interval~\cite{wilson1927} is $[\DefaultRecoveryLow{},\DefaultRecoveryHigh{}]\%$ ($9{,}806/10{,}000$) under this synthetic protocol.
 
 \paragraph{Test environment.}
 Experiments use Ubuntu~22.04 on an Intel Core i5-12400F PC with 32~GB RAM and a GTX 1660 SUPER GPU. GPU Faiss prepared the indexes. Browser experiments use Chromium~155; inference uses Transformers.js~4.3.1 with CPU-only WebAssembly and four threads. Separate \href{https://fast.com/}{FAST.com} checks reported about $300$~Mbit/s download; CDN throughput was uncontrolled.
@@ -137,10 +137,10 @@ Re-embedding $1{,}000$ uniformly sampled passages with the q8 browser encoder yi
 FP16 probe sweeps use 2--5 probes at 8k and 2, 3, 4, 6, 8, 10 at 16k/32k; the 8k four-probe point reuses the original measurement. At 32k and four probes, we compare FP16, SQ8/SQ6/SQ4, symmetric INT8~\cite{Faiss}, and PQ4 with 4-bit codes per eight-component block~\cite{product-quantization}. Cluster assignments and FP16 passage vectors stay fixed. Shared configurations run once.
 
 \paragraph{Hosting and timing.}
-Vector and text files are fetched before timing to prime the CDN cache; the fixed-question run uses $100$ preliminary searches. CDN residency and connections remain uncontrolled; cache bypass does not establish a cold CDN. Timed searches fetch up to ten clusters in parallel. Timed fetches bypass browser HTTP caching, and text loads also bypass the decoded-text cache; untimed accuracy checks allow cached cluster files.
+Vector and text files are prefetched to prime CDN caches; the fixed question has $100$ warm-up searches. CDN residency and connections remain uncontrolled; browser-cache bypass does not establish a cold CDN. Timed searches fetch up to ten clusters in parallel and bypass browser HTTP and decoded-text caches. Untimed accuracy checks allow cached clusters. Each Table~\ref{tab:latency-table} row reports recovery, timing and payload from the same timed queries.
 
 
-Retrieval time covers routing, cluster download, decompression, decoding, and ranking; Section~\ref{sec:client-costs} reports startup and complete-query costs. Centroids load once per configuration; separate download/decode benchmarks use \BenchmarkCentroidSamples{} trials per file. Tables report mean and 95th-percentile times (p95), and gzipped vector payload in decimal MB ($10^6$ bytes). Configuration order was randomised; the original seed and shuffled supplement order are recorded.
+Retrieval time includes routing, vector download, decompression, decoding and ranking; Section~\ref{sec:client-costs} reports startup and complete-query costs. Centroids load once per configuration; separate download/decode benchmarks use \BenchmarkCentroidSamples{} trials per file. Tables give mean and $95$th-percentile (p95) times, and gzipped vector payload in decimal MB ($10^6$ bytes). Configuration order was randomised; the original seed and supplement order are recorded.
 \par
 
 
@@ -159,32 +159,32 @@ At 8k, two to five probes transfer $6.88$--$16.98$~MB/query with $95.4$--$98.7\%
 \end{figure}
 
 \subsection{Centroid loading costs}
-At 32k clusters and four probes (Table~\ref{tab:compression-table}), \textbf{SQ6 cuts mean centroid loading from $929$~ms (FP16) to $324$~ms}; both recover $98.1\%$.
+At 32k/four probes (Table~\ref{tab:compression-table}), \textbf{SQ6 cuts centroid bytes by $61.4\%$}, from $23.24$ to $8.98$~MB. Mean loading in our runs falls from $929$~ms (FP16) to $324$~ms (SQ6); both round to $98.1\%$ source recovery.
 
 \input{figures/large-compression-table}
 
-FP16, SQ8, SQ6, and INT8 differ by at most $0.09$ percentage points; paired significance was not assessed. SQ4 and PQ4 reduce recovery at the tested code sizes. SQ4 implies $\SQFourMbps{}$~Mbit/s versus a separate $300$~Mbit/s check; throughput was uncontrolled. These synthetic results support 32k/SQ6 and four probes as a practical demo default within the tested grid; larger cluster counts remain unevaluated.
+FP16, SQ8, SQ6, and INT8 differ by at most $0.09$ percentage points; paired significance was not assessed. SQ4 and PQ4 reduce recovery at the tested code sizes. We use 32k/SQ6 and four probes as the demo default within this synthetic grid; larger cluster counts remain unevaluated.
 
 \subsection{Client setup and query costs}
 \label{sec:client-costs}
 \paragraph{Complete ten-result query.}
-For ``How do plants turn sunlight into energy?'', the client returns ten passages at 32k/SQ6 and four probes. Across $1{,}000$ repetitions, search submission to worker reply takes $130.3/150.3$~ms (mean/p95), including embedding, vector retrieval, text loading, and message handling. Startup and DOM rendering are excluded; model and decoded centroids stay loaded. This repeated fixed-question p95 measures jitter, not variation across questions. The results require $2.48$~MB of gzipped vectors and $0.77$~MB of Brotli text ($3.25$~MB total payload, excluding HTTP headers).
+For ``How do plants turn sunlight into energy?'' at 32k/SQ6, four probes and ten results, $1{,}000$ repetitions take $130.3/150.3$~ms (mean/p95) from submission to worker reply. Timing includes embedding, retrieval, text loading and message handling; startup and DOM rendering are excluded. Model and decoded centroids stay loaded. This fixed-question p95 measures jitter, not question variation. Payload is $2.48$~MB of gzipped vectors and $0.77$~MB of Brotli text ($3.25$~MB), excluding HTTP headers.
 
 \paragraph{Separate components.}
-For synthetic queries, top-1 retrieval at 32k/SQ6 and four probes takes $122/187$~ms (mean/p95), with $98.1\%$ source recovery and $3.98$~MB of vectors. The fixed question transfers about $38\%$ fewer vector bytes; these component runs cannot be added to estimate varied-question end-to-end latency.
+Synthetic $k=1$ vector retrieval at 32k/SQ6 and four probes takes $122/187$~ms (mean/p95), excluding embedding and text, with $98.1\%$ source recovery and $3.98$~MB of vectors. The fixed question uses $38\%$ fewer vector bytes; these separate runs cannot be added to estimate varied-question end-to-end latency.
 \paragraph{Startup.}
-Startup spans worker creation to model and 32k SQ6 centroid readiness, excluding page navigation. Across $100$ fresh browser contexts in one Chromium process, it takes $2.46/2.53$~s (mean/p95). Model ($23.7$~MB) and WebAssembly runtime ($14.3$~MB) response bodies plus compressed centroids ($9.0$~MB) total about $47$~MB; HTTP compression can reduce transfer. Browser caching is bypassed; loading phases overlap.
+Startup spans worker creation to model and 32k SQ6 centroid readiness, excluding navigation. Across $100$ fresh browser contexts in one Chromium process, it takes $2.46/2.53$~s (mean/p95). Model ($23.7$~MB) and WebAssembly runtime ($14.3$~MB) response bodies plus compressed centroids ($9.0$~MB) total about $47$~MB; HTTP compression can reduce transfer. Browser caching is bypassed; loading overlaps.
 
 \subsection{Trade-offs and limitations}
-A hypothetical $48$-byte/vector PQ index needs $1.69$~GB for codes alone. With full startup bodies and no cache reuse, $47+3.25Q$~MB reaches this at about $505$ queries. This compares bytes, not quality or latency; IDs, codebooks, and storage overhead affect the crossing. One million uncached fixed-question searches transfer $3.25$~TB before startup or headers. A server returns text alone but receives the query and needs search compute; that baseline is unmeasured.
+A hypothetical $48$-byte/vector PQ index occupies $1.69$~GB in codes alone, equivalent to about $680$ uncached fixed-question vector downloads of $2.48$~MB. This compares vector bytes, not quality or latency, and excludes IDs, codebooks, caching and storage overhead. One million uncached fixed-question searches transfer $3.25$~TB of vectors and text before startup or headers. A server returns text alone but receives the query and needs search compute; that baseline is unmeasured.
 
-FP16 passage vectors dominate transfer. SQ8/PQ passage codes with optional rescoring could reduce it, but change ranking and require evaluation. At 32k, manifest cluster sizes have median $1{,}023$, p95 $2{,}188$, and maximum $8{,}263$ passages. The four largest gzip files sum to $19.32$~MB, an upper bound at four probes, not an observed query percentile; byte tails remain unmeasured. Varied real-question end-to-end mean/p95/max, cold-connection and cold-CDN trials, and throttled/mobile profiles remain necessary before generalising the desktop timings.
+FP16 vectors dominate transfer. SQ8/PQ passage codes with optional rescoring could reduce bytes, but change ranking and require evaluation. At 32k, cluster sizes have median $1{,}023$, p95 $2{,}188$, and maximum $8{,}263$ passages. The four largest gzip files sum to $19.32$~MB: a four-probe upper bound, not a query percentile; byte tails are unmeasured. Varied real-question end-to-end mean/p95/max, cold-connection/CDN trials and throttled/mobile profiles are needed before generalising desktop timings.
 
 \paragraph{Privacy threat model.}
-Assuming trusted client code, query text and embeddings stay local. The host/CDN can link IP addresses and timing to four of $32{,}768$ cluster IDs and text-batch IDs. For uncached requests, intersecting these batches with downloaded candidate IDs can identify returned passages and potentially reconstruct the displayed result set; inference effectiveness is unmeasured. Displayed results do not establish which passages were read. While co-locating text with vector clusters would help mitigate this leakage, we did not implement this option for simplicity. Shared ID-based text batches let us vary the cluster count without maintaining a separate text layout for each count. Co-location would avoid result-specific text requests, although selected clusters would remain visible. PIR, as in Tiptoe~\cite{Tiptoe}, requires a different serving protocol.
+Assuming trusted client code and dependencies, query text and embeddings stay local. Model and runtime assets load from Hugging Face and jsDelivr. The host/CDN can link IP addresses and timing to four of $32{,}768$ cluster IDs and text-batch IDs. For uncached requests, intersecting these batches with downloaded candidate IDs can identify returned passages and potentially reconstruct the displayed result set; inference effectiveness is unmeasured. Displayed results do not establish which passages were read. Shared ID-based text batches support all three cluster counts. Co-location would avoid result-specific text requests but require one text layout per count, while selected clusters remain visible. PIR, as in Tiptoe~\cite{Tiptoe}, requires a different serving protocol.
 
 \section{Conclusion}
-Local IVF routing enables browser search over $35.2$ million statically hosted passages. The demo exposes source recovery, latency, and bandwidth trade-offs.
+Local IVF routing enables browser search over $35.2$ million statically hosted passages. The demo exposes source recovery, latency, and bandwidth trade-offs; real-question quality, cold-CDN latency and mobile performance remain unevaluated.
 
 \section{Ethical use of data}
 We downloaded Maloyan's precomputed embeddings of $35{,}167{,}920$ English Wikipedia passages (\nolinkurl{wikipedia-22-12-en})~\cite{wiki-minilm}. They were generated by applying the MiniLM encoder~\cite{minilm-model-card} to these passages. The encoder and its Xenova ONNX conversion~\cite{xenova-model-card} for browser queries are Apache-2.0 licensed. Result links credit Wikipedia contributors through source articles~\cite{wikipedia-copyrights}. The supplied client and text exporters include a \href{https://creativecommons.org/licenses/by-sa/3.0/}{CC BY-SA 3.0} notice and \texttt{DATA-NOTICE.txt}, recording attribution and extraction/packaging changes. The embedding dataset specifies no separate licence. Passages reflect an archived snapshot and may be outdated or biased; linked articles may have changed or been deleted. Experiments involve no human participants.

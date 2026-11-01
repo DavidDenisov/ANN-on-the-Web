@@ -8,6 +8,8 @@ from pathlib import Path
 import matplotlib
 matplotlib.use("Agg")
 from matplotlib import pyplot as plt
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -205,7 +207,10 @@ for i, (codec, label) in enumerate([('f16', 'FP16'), ('sq8', 'SQ8'), ('sq6', 'SQ
                  f"{float(setup['decode_mean_ms']):.0f} / {float(setup['decode_p95_ms']):.0f}" + r' \\ \hline')
 (OUT / 'large-compression-rows.tex').write_text('\n'.join(lines) + '\n')
 
-c = canvas.Canvas(str(OUT / "architecture.pdf"), pagesize=(246, 288))
+font_dir = Path(matplotlib.get_data_path()) / 'fonts/ttf'
+pdfmetrics.registerFont(TTFont('DejaVuSans', str(font_dir / 'DejaVuSans.ttf')))
+pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', str(font_dir / 'DejaVuSans-Bold.ttf')))
+c = canvas.Canvas(str(OUT / "architecture.pdf"), pagesize=(246, 288), initialFontName='DejaVuSans')
 c.setTitle("Startup and search: local processing and selected file downloads")
 c.setLineWidth(.7)
 
@@ -217,14 +222,14 @@ def box(y, number, title, detail):
     c.setFillColorRGB(.12, .23, .35)
     c.circle(14, y + 12.5, 6.5, fill=1, stroke=0)
     c.setFillColorRGB(1, 1, 1)
-    c.setFont("Helvetica-Bold", 8)
+    c.setFont("DejaVuSans-Bold", 8)
     c.drawCentredString(14, y + 9.7, str(number))
     c.setFillColorRGB(.1, .1, .1)
-    c.setFont("Helvetica-Bold", 8.2)
-    assert c.stringWidth(title, 'Helvetica-Bold', 8.2) < 129
+    c.setFont("DejaVuSans-Bold", 8.2)
+    assert c.stringWidth(title, 'DejaVuSans-Bold', 8.2) < 129
     c.drawString(25, y + 16, title)
-    c.setFont("Helvetica", 7.2)
-    assert c.stringWidth(detail, 'Helvetica', 7.2) < 129
+    c.setFont("DejaVuSans", 7.2)
+    assert c.stringWidth(detail, 'DejaVuSans', 7.2) < 129
     c.drawString(25, y + 6, detail)
 
 
@@ -240,11 +245,11 @@ c.roundRect(.5, .5, 245, 287, 3, fill=0, stroke=1)
 c.setFillColorRGB(.96, .97, .98)
 c.rect(1.5, 1.5, 243, 17, fill=1, stroke=0)
 c.setFillColorRGB(.12, .23, .35)
-c.setFont("Helvetica-Bold", 8.2)
+c.setFont("DejaVuSans-Bold", 8.2)
 c.drawString(4, 277, "SEARCH IN THE BROWSER")
-c.setFont("Helvetica-Bold", 7.8)
+c.setFont("DejaVuSans-Bold", 7.8)
 c.drawString(181, 277, "STATIC CDN")
-c.setFont("Helvetica", 6.7)
+c.setFont("DejaVuSans", 6.7)
 c.drawString(4, 267, "Query and embedding stay local")
 c.drawString(181, 267, "Fetched files")
 c.setStrokeColorRGB(.7, .7, .7)
@@ -254,12 +259,12 @@ c.setDash()
 c.setFillColorRGB(1, 1, 1)
 c.roundRect(4, 211, 156, 14, 3, fill=1, stroke=1)
 c.setFillColorRGB(.12, .23, .35)
-c.setFont("Helvetica", 6.9)
+c.setFont("DejaVuSans", 6.9)
 question = "How do plants turn sunlight into energy?"
-assert c.stringWidth(question, 'Helvetica', 6.9) < 144
+assert c.stringWidth(question, 'DejaVuSans', 6.9) < 144
 c.drawCentredString(82, 215.5, question)
 for y, number, title, detail in [
-        (232, 0, "Download model and centroids", "Once, before queries"),
+        (232, 0, "Load startup assets", "Model, WASM runtime, centroids"),
         (176, 1, "Embed query", "Text -> normalized query vector"),
         (141, 2, "Select clusters to probe", "Nearest centroids by L2 distance"),
         (106, 3, "Fetch selected clusters", "Download passage IDs + vectors"),
@@ -271,7 +276,7 @@ arrow(82, 232, 82, 225)
 for y in (211, 176, 141, 106, 71):
     arrow(82, y, 82, y - 10)
 
-for y, title, detail in [(231, "Model + centroids", ""),
+for y, title, detail in [(231, "Model + runtime", "+ centroids"),
                          (109, "Selected clusters", "IDs + FP16 vectors"),
                          (40, "Text batches", "Top matches only")]:
     for offset in (5.4, 3.6, 1.8, 0):
@@ -282,9 +287,9 @@ for y, title, detail in [(231, "Model + centroids", ""),
     for line_y in (y + 7, y + 12, y + 17):
         c.line(194, line_y, 209, line_y)
     c.setFillColorRGB(.12, .23, .35)
-    c.setFont("Helvetica-Bold", 6.7)
+    c.setFont("DejaVuSans-Bold", 6.7)
     c.drawCentredString(209, y - 10, title)
-    c.setFont("Helvetica", 6.2)
+    c.setFont("DejaVuSans", 6.2)
     c.drawCentredString(209, y - 18, detail)
 for y in (244.5, 118.5, 48.5):
     c.setStrokeColorRGB(.05, .35, .62)
@@ -293,11 +298,11 @@ for y in (244.5, 118.5, 48.5):
     c.setFillColorRGB(1, 1, 1)
     c.rect(161, y + 3, 22, 8, fill=1, stroke=0)
     c.setFillColorRGB(.05, .35, .62)
-    c.setFont("Helvetica", 6)
+    c.setFont("DejaVuSans", 6)
     c.drawCentredString(172, y + 5, "fetch")
 c.setFillColorRGB(.3, .3, .3)
-c.setFont("Helvetica", 6.8)
-c.drawString(7, 7, "Reuse the model and centroids across queries.")
+c.setFont("DejaVuSans", 6.8)
+c.drawString(7, 7, "Reuse model, runtime and centroids across queries.")
 c.showPage()
 c.save()
 print("Generated compact tables, probe, recovery--time and recovery--bytes plots, and architecture PDF.")
