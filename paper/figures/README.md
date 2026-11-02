@@ -2,7 +2,7 @@
 
 From the repository root, run `python3 paper/figures/generate.py` with matplotlib and reportlab installed. The generator reads retained compact summaries and manifest size fields, checks their consistency, and regenerates the architecture, recovery-versus-time, recovery-versus-bytes and probe plots, table rows, recovery intervals and derived LaTeX values. No corpus download is needed.
 
-The paper uses:
+The paper uses the assets below. Screenshot bottoms and right-hand scrollbars are clipped in LaTeX; the stored captures remain unchanged.
 
 - `screenshots/search-desktop.jpg`: full browser capture (1425×1188 pixels) from the live production site on November 2, 2026, after shortening the privacy/download notices. It shows the default ten-result plants/sunlight question with the site's actual styles, without cropping, resizing or capture-only changes. Full privacy and download details remain under "About this search". The displayed timings are from this one interface check, separate from the retained paper measurements.
 - `screenshots/lab-desktop.jpg`: full browser capture (1099×893 pixels) from the live production site on November 2, 2026, after shortening the sidebar explanations. The entire left settings sidebar remains visible beside the comparison panels, including noise and query-count controls, the download warning and expandable measurement details. It shows the lab ready to run with the default ten-query setting. The site's actual styles are used, without cropping, resizing, capture-only changes or inserted results. No benchmark run was performed for this capture; the paper's retained measurements are unchanged.
