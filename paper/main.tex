@@ -52,9 +52,11 @@ Semantic search on a static document collection usually requires a search servic
 We demonstrate a static-Web deployment of established ANN techniques: search exposes per-question costs, while the lab isolates routing and centroid compression. FP16 vectors occupy about $27$~GB per index layout; each query fetches selected clusters and result text from Cloudflare Pages.
 
 \subsection{Related work}
-SPANN~\cite{spann} keeps centroids in memory and posting lists on disk; our browser instead fetches static HTTP files. DiskANN~\cite{DiskANN} uses graph traversal. Tiptoe~\cite[Sections~3--5]{Tiptoe} selects clusters locally, hides that selection through encrypted server-side similarities, and privately retrieves result URLs. Our client downloads plaintext vectors and ranks locally, trading cryptographic privacy for static serving. Selective loading also appears in \href{https://pagefind.app/}{Pagefind}'s lexical search and the HTTP database chunks of \href{https://github.com/phiresky/sql.js-httpvfs}{sql.js-httpvfs}.
+Our system builds on the author's earlier public image-search prototype, which is not demonstrated here because of its adult content. Related software includes the subsequently released ANNPack, which retrieves selected IVF lists through HTTP range requests.
 
-MeMemo~\cite{MeMemo} and WebANNS~\cite{WebANNS} use browser-local HNSW in RAM and IndexedDB. WebANNS evaluates up to $480{,}000$ passages. Our larger remote corpus uses parallel cluster reads; the ANN algorithm is established.
+SPANN~\cite{spann} keeps centroids in RAM and posting lists on disk; our browser fetches static HTTP files. DiskANN~\cite{DiskANN} uses graph traversal. Tiptoe~\cite[Sections~3--5]{Tiptoe} combines local cluster selection with encrypted server-side similarities and private URL retrieval. We download plaintext vectors and rank locally, trading cryptographic privacy for static serving. Selective loading also appears in \href{https://pagefind.app/}{Pagefind} and \href{https://github.com/phiresky/sql.js-httpvfs}{sql.js-httpvfs}.
+
+MeMemo~\cite{MeMemo} and WebANNS~\cite{WebANNS} use browser-local HNSW in RAM and IndexedDB; WebANNS evaluates up to $480{,}000$ passages. We use parallel cluster reads over a larger remote corpus.
 
 \section{Demonstration scenario}
 \label{sec:demo}
