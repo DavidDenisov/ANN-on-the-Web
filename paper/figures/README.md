@@ -2,7 +2,7 @@
 
 From the repository root, run `python3 paper/figures/generate.py` with matplotlib and reportlab installed. The generator reads retained compact summaries and manifest size fields, checks their consistency, and regenerates the architecture, recovery-versus-time, recovery-versus-bytes and probe plots, table rows, recovery intervals and derived LaTeX values. No corpus download is needed.
 
-Paper-only label sizing is in `paper-overrides.css`, loaded after `assets/styles.css` in the [paper preview](https://paper-figures.wiki-ann-demo-20261022.pages.dev/client_wiki/). Use that preview for future captures; keep the override stylesheet out of the production (`main`) deployment. The screenshots below were captured before the styles were separated and retain the same appearance.
+Production uses the pre-enlargement presentation from commit `0e26a88`. The enlarged HTML/CSS snapshot in `client-preview/` is hosted at the separate [paper preview](https://paper-figures.wiki-ann-demo-20261022.pages.dev/client_wiki/). Use that preview for future paper captures. To refresh it, overlay `client-preview/` onto `client_wiki/` in a separate prepared frontend root and deploy branch `paper-figures`; keep these presentation files out of the production (`main`) deployment. The screenshots below were captured before the styles were separated and retain the same appearance.
 
 The paper uses the assets below. Repeated screenshot mastheads and bottom/right edges are clipped in LaTeX to focus on controls and results; the stored captures remain unchanged.
 
