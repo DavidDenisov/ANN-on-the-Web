@@ -40,13 +40,13 @@
         <option value="https://wiki-ann-benchmarks-20261017.pages.dev/noise-medium/suite.json">Medium</option>
         <option value="https://wiki-ann-benchmarks-20261017.pages.dev/noise-large/suite.json">High (harder)</option>
       </select>
-      <p class="query-help" id="noiseHint">Higher noise makes queries less similar.</p>
+      <p class="query-help" id="noiseHint">Higher noise = harder queries.</p>
       <p class="fixture-info" id="fixtureInfo">Loading benchmark…</p>
       <label for="queryCount">Queries per configuration</label>
       <input id="queryCount" type="number" min="1" max="10000" step="1" value="10" required aria-describedby="queryCountHint labWarning">
-      <p class="query-help" id="queryCountHint">Small samples illustrate behavior; paper runs use 10,000.</p>
+      <p class="query-help" id="queryCountHint">Paper runs use 10,000 queries.</p>
       </fieldset>
-      <p class="query-help" id="labWarning"><strong>Downloads:</strong> Queries load on open. Short checks: hundreds of MB. Full runs: hours and hundreds of GB.</p>
+      <p class="query-help" id="labWarning"><strong>Downloads:</strong> Hundreds of MB or more. See measurement details below.</p>
       <button class="btn btn-primary" id="runAll" type="button" aria-describedby="labWarning" disabled>Run all checks</button>
       <button class="btn btn-secondary" id="cancelRun" type="button" hidden>Cancel run</button>
       <p class="status" id="labStatus" role="status" aria-live="polite">Loading test queries…</p>
