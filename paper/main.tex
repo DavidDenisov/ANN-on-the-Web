@@ -54,9 +54,11 @@ We demonstrate a static-Web deployment of established ANN techniques: search exp
 \subsection{Related work}
 Our system builds on the author's earlier public image-search prototype, which is not demonstrated here because of its adult content. Related software includes the subsequently released ANNPack, which retrieves selected IVF lists through HTTP range requests.
 
-SPANN~\cite{spann} keeps centroids in RAM and posting lists on disk; we fetch static HTTP files. DiskANN~\cite{DiskANN} uses graphs. Tiptoe~\cite[Sections~3--5]{Tiptoe} combines local cluster selection, encrypted server-side similarities and private URL retrieval. We trade cryptographic privacy for static serving through plaintext downloads and local ranking. Keyword search (\href{https://pagefind.app/}{Pagefind}) and SQL (\href{https://github.com/phiresky/sql.js-httpvfs}{sql.js-httpvfs}) likewise process selectively downloaded static data in the browser.
+SPANN~\cite{spann} uses centroids in RAM to select posting lists on disk. Tiptoe~\cite[Sections~3--5]{Tiptoe} selects clusters locally and uses cryptographic protocols for query and result privacy. We download selected clusters as static files and rank plaintext vectors locally, exposing file requests to the host.
 
-MeMemo~\cite{MeMemo} and WebANNS~\cite{WebANNS} use browser-local HNSW in RAM and IndexedDB; WebANNS evaluates up to $480{,}000$ passages. We use parallel cluster reads over a larger remote corpus.
+DiskANN~\cite{DiskANN} uses graphs. MeMemo~\cite{MeMemo} and WebANNS~\cite{WebANNS} use HNSW graphs in browser RAM and IndexedDB; WebANNS evaluates up to $480{,}000$ passages. We fetch remote clusters in parallel over a larger corpus.
+
+More broadly, \href{https://pagefind.app/}{Pagefind} (keyword search) and \href{https://github.com/phiresky/sql.js-httpvfs}{sql.js-httpvfs} (SQL) also process selectively downloaded static data in the browser.
 
 \section{Demonstration scenario}
 \label{sec:demo}
