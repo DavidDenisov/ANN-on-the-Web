@@ -110,7 +110,7 @@ We train $C$ centroids with Faiss $k$-means~\cite{Faiss}, using $20$ iterations 
 Brotli files hold $500$ contiguous passage IDs each, except the last. These text batches are shared across cluster counts.
 
 \paragraph{Static hosting.}
-The $70{,}336$ text files use $71$ branch deployments; vectors and centroids use $59$ more in a second Pages project. Manifests map files to URLs. Our $1{,}000$-file upload batches are a packaging choice, below the provider's \href{https://developers.cloudflare.com/pages/platform/limits/}{$20{,}000$-file Free-plan ceiling}. Object storage can replace these hosts through manifest updates preserving CORS, content-encoding, and worker-isolation headers.
+The $70{,}336$ text files use $71$ branch deployments; vectors and centroids use $59$ more in a second Pages project. Manifests map files to URLs. Our $1{,}000$-file upload batches are a packaging choice, below the provider's \href{https://developers.cloudflare.com/pages/platform/limits/}{$20{,}000$-file Free-plan ceiling}.
 
 
 \begin{figure}[tb]
