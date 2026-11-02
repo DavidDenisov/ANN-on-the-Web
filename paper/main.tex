@@ -147,7 +147,7 @@ FP16 probe sweeps use 2--5 probes at 8k and 2, 3, 4, 6, 8, 10 at 16k/32k; the 8k
 Vector and text files are prefetched to prime CDN caches; the fixed question has $100$ warm-up searches. CDN residency and connections remain uncontrolled; browser-cache bypass does not establish a cold CDN. Timed searches fetch up to ten clusters in parallel and bypass browser HTTP and decoded-text caches. Untimed accuracy checks allow cached clusters. Table~\ref{tab:latency-table} reports recovery, timing and payload on the same timed queries.
 
 
-Retrieval time includes routing, vector download, decompression, decoding and ranking; Section~\ref{sec:client-costs} reports startup and complete-query costs. Centroids load once per configuration; separate download/decode benchmarks use \BenchmarkCentroidSamples{} trials per file. Tables give mean and $95$th-percentile (p95) times, and gzipped vector payload in decimal MB ($10^6$ bytes). Configuration order was randomised; the original seed and supplement order are recorded.
+Retrieval time includes routing, vector download, decompression, decoding and ranking; Sections~\ref{sec:text-retrieval}--\ref{sec:client-costs} report text retrieval, startup and total query costs. Centroids load once per configuration; separate download/decode benchmarks use \BenchmarkCentroidSamples{} trials per file. Tables give mean and $95$th-percentile (p95) times, and gzipped vector payload in decimal MB ($10^6$ bytes). Configuration order was randomised; the original seed and supplement order are recorded.
 \par
 
 
@@ -172,16 +172,19 @@ At 32k/four probes (Table~\ref{tab:compression-table}), \textbf{SQ6 cuts centroi
 
 FP16, SQ8, SQ6, and INT8 differ by at most $0.09$ percentage points; paired significance was not assessed. SQ4 and PQ4 reduce recovery at the tested code sizes. We choose 32k/SQ6 and four probes from this synthetic grid; higher cluster counts are untested.
 
-\subsection{Client setup and query costs}
-\label{sec:client-costs}
-\paragraph{Complete ten-result query.}
-For ``How do plants turn sunlight into energy?'' at 32k/SQ6, four probes and ten results, $1{,}000$ repetitions take $130.3/150.3$~ms (mean/p95) from submission to worker reply. Timing includes embedding, retrieval, text loading and message handling; startup and DOM rendering are excluded. Model and decoded centroids stay loaded. This fixed-question p95 measures jitter, not question variation. Payload is $2.48$~MB of gzipped vectors and $0.77$~MB of Brotli text ($3.25$~MB), excluding HTTP headers.
+\Needspace{10\baselineskip}
+\subsection{Text retrieval}
+\label{sec:text-retrieval}
+We measure $1{,}000$ groups of ten passages, using $10{,}000$ uniformly sampled distinct passage IDs. Text retrieval takes $34.9/54.9$~ms (mean/p95), covering parallel batch downloads, Brotli decompression and text decoding. We prefetch files and bypass browser and decoded-text caches. DOM rendering is excluded.
 
-\paragraph{Text retrieval.}
-We measure $1{,}000$ groups of ten passages, using $10{,}000$ uniformly sampled distinct passage IDs. Text retrieval takes $34.9/54.9$~ms (mean/p95), covering parallel batch downloads, Brotli decompression and text decoding. DOM rendering is excluded; files are prefetched and browser/decoded-text caches are bypassed.
-
-\paragraph{Startup.}
+\subsection{Client setup}
 Startup spans worker creation to model and 32k SQ6 centroid readiness, excluding navigation. Across $100$ fresh browser contexts in one Chromium process, it takes $2.46/2.53$~s (mean/p95). Model ($23.7$~MB), WebAssembly runtime ($14.3$~MB) and compressed centroids ($9.0$~MB) total about $47$~MB before HTTP compression. Loads overlap and bypass browser caching.
+
+\subsection{Total query cost}
+\label{sec:client-costs}
+At 32k/SQ6 and four probes, vector retrieval averages $122.4$~ms ($k=1$). Adding ten-passage text loading ($34.9$~ms) and embedding ($9.1/16.9/33.8$~ms for $64/128/256$ tokens) gives estimated budgets of $166.4/174.1/191.1$~ms. This sums means from separate workloads, excluding startup, DOM rendering, messaging and additional top-ten ranking cost.
+
+For ``How do plants turn sunlight into energy?'' at the same settings with ten results, $1{,}000$ repetitions take $130.3/150.3$~ms (mean/p95) from submission to worker reply. Timing includes embedding, retrieval, text loading and message handling; startup and DOM rendering are excluded. Model and decoded centroids stay loaded. This fixed-question p95 measures jitter, not question variation. Payload is $2.48$~MB of gzipped vectors and $0.77$~MB of Brotli text ($3.25$~MB), excluding HTTP headers.
 
 \subsection{Trade-offs and limitations}
 SQ8/PQ passage codes with optional rescoring could reduce vector transfer, but their ranking quality is untested. A server returning text alone is also an unmeasured baseline.
