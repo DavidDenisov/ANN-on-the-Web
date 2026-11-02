@@ -29,7 +29,7 @@
 \begin{document}
 
 \begin{abstract}
-We demonstrate browser-based approximate nearest neighbour (ANN) search over $35.2$ million English Wikipedia passages hosted on a static CDN. The browser embeds questions locally, uses inverted file (IVF) routing to select vector clusters for parallel download, ranks their vectors, and fetches text for the top results. This avoids a full index download or an application search server. Visitors submit questions and inspect passages, timings, and download costs; a companion lab measures the recovery--bandwidth trade-off. On a desktop with primed CDN caches, at 32k clusters, SQ6 centroids, and four probes, a repeated fixed question returning ten passages averages $130.3$~ms to worker reply, including embedding and text loading but excluding startup, with $3.25$~MB of compressed payload. Worker startup averages $2.46$~s. At the same settings, isotropic perturbations of L2 norm $0.4$ yield $98.1\%$ source recovery@1; this is not real-question recall. Queries and embeddings stay local, while file requests can reveal access patterns.
+We demonstrate browser-based approximate nearest neighbour (ANN) search over $35.2$ million English Wikipedia passages hosted on a static CDN. The browser embeds questions locally, uses inverted file (IVF) routing to select vector clusters for parallel download, ranks their vectors, and fetches text for the top results. This avoids a full index download or an application search server. Visitors submit questions and inspect passages, timings, and download costs; a companion lab measures the recovery--bandwidth trade-off. On a desktop with primed CDN caches, at 32k clusters, SQ6 centroids, and four probes, separate vector, ten-passage text and embedding means sum to an estimated $166$--$191$~ms, depending on input length and excluding startup. Worker startup averages $2.46$~s. At the same settings, isotropic perturbations of L2 norm $0.4$ yield $98.1\%$ source recovery@1; this is not real-question recall. Queries and embeddings stay local; requests can reveal access patterns.
 \end{abstract}
 
 \ccsdesc[500]{Information systems~Similarity search}
@@ -78,7 +78,7 @@ The lab (Figure~\ref{fig:lab-demo}) offers noise presets and checks for cluster 
 \centering
 \includegraphics[trim=0 110bp 16bp 168bp,clip,width=\columnwidth]{screenshots/search-desktop.jpg}
 \Description{Current search interface showing privacy and download notices with the question form on the left and ranked Wikipedia passages with timings on the right.}
-\caption{Search with concise privacy/download notices and passages. Capture timings are separate from the warmed averages in Section~\ref{sec:client-costs}. Text enlarged for clarity.}
+\caption{Search with concise privacy/download notices and passages. Capture timings are illustrative; Section~\ref{sec:client-costs} estimates costs from component means. Text enlarged for clarity.}
 \label{fig:search-demo}
 \end{minipage}\hfill
 \begin{minipage}[t]{\columnwidth}
@@ -124,7 +124,7 @@ The $70{,}336$ text files use $71$ branch deployments; vectors and centroids use
 
 \section{Supporting evaluation}
 \label{sec:comparison}
-Each index covers $35{,}167{,}920$ passages. Tests use synthetic perturbations for routing and a fixed question for the ten-result workflow.
+Each index covers $35{,}167{,}920$ passages. Tests use synthetic perturbations for routing and groups of ten passages for text retrieval.
 
 \paragraph{Query setup.}
 Configurations share \BenchmarkQueryCount{} uniformly sampled distinct source passages. We draw a Gaussian vector $v\in\mathbb{R}^{384}$, rescale it to noise magnitude $\|v\|_2=\alpha$, add it to the unit source vector, then renormalise. Routing tests use High ($\alpha=0.4$); the lab also offers Low ($0.05$) and Medium ($0.15$).
@@ -144,7 +144,7 @@ Re-embedding $1{,}000$ uniformly sampled passages with the q8 browser encoder yi
 FP16 probe sweeps use 2--5 probes at 8k and 2, 3, 4, 6, 8, 10 at 16k/32k; the 8k four-probe point reuses the original measurement. At 32k and four probes, we compare FP16, SQ8/SQ6/SQ4, symmetric INT8~\cite{Faiss}, and PQ4 with 4-bit codes per eight-component block~\cite{product-quantization}. Cluster assignments and FP16 passage vectors stay fixed. Shared configurations run once.
 
 \paragraph{Hosting and timing.}
-Vector and text files are prefetched to prime CDN caches; the fixed question has $100$ warm-up searches. CDN residency and connections remain uncontrolled; browser-cache bypass does not establish a cold CDN. Timed searches fetch up to ten clusters in parallel and bypass browser HTTP and decoded-text caches. Untimed accuracy checks allow cached clusters. Table~\ref{tab:latency-table} reports recovery, timing and payload on the same timed queries.
+Vector and text files are prefetched to prime CDN caches. CDN residency and connections remain uncontrolled; browser-cache bypass does not establish a cold CDN. Timed routing searches return one passage, fetch up to ten clusters in parallel and bypass browser HTTP caches. Untimed accuracy checks allow cached clusters. Table~\ref{tab:latency-table} reports recovery, timing and payload on the same timed queries.
 
 
 Retrieval time includes routing, vector download, decompression, decoding and ranking; Sections~\ref{sec:text-retrieval}--\ref{sec:client-costs} report text retrieval, startup and total query costs. Centroids load once per configuration; separate download/decode benchmarks use \BenchmarkCentroidSamples{} trials per file. Tables give mean and $95$th-percentile (p95) times, and gzipped vector payload in decimal MB ($10^6$ bytes). Configuration order was randomised; the original seed and supplement order are recorded.
@@ -182,9 +182,7 @@ Startup spans worker creation to model and 32k SQ6 centroid readiness, excluding
 
 \subsection{Total query cost}
 \label{sec:client-costs}
-At 32k/SQ6 and four probes, vector retrieval averages $122.4$~ms ($k=1$). Adding ten-passage text loading ($34.9$~ms) and embedding ($9.1/16.9/33.8$~ms for $64/128/256$ tokens) gives estimated budgets of $166.4/174.1/191.1$~ms. This sums means from separate workloads, excluding startup, DOM rendering, messaging and additional top-ten ranking cost.
-
-For ``How do plants turn sunlight into energy?'' at the same settings with ten results, $1{,}000$ repetitions take $130.3/150.3$~ms (mean/p95) from submission to worker reply. Timing includes embedding, retrieval, text loading and message handling; startup and DOM rendering are excluded. Model and decoded centroids stay loaded. This fixed-question p95 measures jitter, not question variation. Payload is $2.48$~MB of gzipped vectors and $0.77$~MB of Brotli text ($3.25$~MB), excluding HTTP headers.
+At 32k/SQ6 and four probes, vector retrieval averages $122.4$~ms and ten-passage text loading $34.9$~ms. Embedding averages $9.1$, $16.9$ and $33.8$~ms for $64$, $128$ and $256$ tokens, giving estimated totals of $166.4$, $174.1$ and $191.1$~ms, respectively. Estimates combine separate runs, excluding startup, rendering, messaging and extra ranking.
 
 \subsection{Trade-offs and limitations}
 SQ8/PQ passage codes with optional rescoring could reduce vector transfer, but their ranking quality is untested. A server returning text alone is also an unmeasured baseline.
@@ -197,6 +195,7 @@ Assuming trusted client code and dependencies, query text and embeddings stay lo
 \section{Conclusion}
 Local IVF routing enables browser search over $35.2$ million statically hosted passages. The demo exposes source recovery, latency, and bandwidth trade-offs; real-question quality, cold-CDN latency and mobile performance remain unevaluated.
 
+\Needspace{18\baselineskip}
 \section{Ethical use of data}
 We downloaded Maloyan's precomputed embeddings of $35{,}167{,}920$ English Wikipedia passages (\nolinkurl{wikipedia-22-12-en})~\cite{wiki-minilm}. They were generated by applying the MiniLM encoder~\cite{minilm-model-card} to these passages. The encoder and its Xenova ONNX conversion~\cite{xenova-model-card} for browser queries are Apache-2.0 licensed. Result links credit Wikipedia contributors through source articles~\cite{wikipedia-copyrights}. The supplied client and text exporters include a \href{https://creativecommons.org/licenses/by-sa/3.0/}{CC BY-SA 3.0} notice and \texttt{DATA-NOTICE.txt}, recording attribution and extraction/packaging changes. The embedding dataset specifies no separate licence. Archived passages may be outdated or biased, and linked articles may change or disappear. No human participants were involved.
 
