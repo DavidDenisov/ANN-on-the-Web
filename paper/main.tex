@@ -127,7 +127,7 @@ The $70{,}336$ text files use $71$ branch deployments; vectors and centroids use
 Each index covers $35{,}167{,}920$ passages. Tests use synthetic perturbations for routing and a fixed question for the ten-result workflow.
 
 \paragraph{Query setup.}
-Configurations share \BenchmarkQueryCount{} uniformly sampled distinct source passages. We add $v\in\mathbb{R}^{384}$ with uniformly random direction and $\|v\|_2=\alpha=0.4$ to each unit source vector, then renormalise. The lab also offers $0.05$ and $0.15$.
+Configurations share \BenchmarkQueryCount{} uniformly sampled distinct source passages. We draw a Gaussian vector $v\in\mathbb{R}^{384}$, rescale it to noise magnitude $\|v\|_2=\alpha$, add it to the unit source vector, then renormalise. Routing tests use High ($\alpha=0.4$); the lab also offers Low ($0.05$) and Medium ($0.15$).
 
 \paragraph{Perturbation scale and scope.}
 On $1{,}000$ sources, mean query-source L2 displacement is $0.378$, or $55.5\%$ of the mean nearest-neighbour distance ($0.681$) from an exact full-corpus scan excluding self matches. This probes IVF boundaries; isotropic noise does not model question--passage distributions.
