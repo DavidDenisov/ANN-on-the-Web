@@ -177,9 +177,6 @@ FP16, SQ8, SQ6, and INT8 differ by at most $0.09$ percentage points; paired sign
 \paragraph{Complete ten-result query.}
 For ``How do plants turn sunlight into energy?'' at 32k/SQ6, four probes and ten results, $1{,}000$ repetitions take $130.3/150.3$~ms (mean/p95) from submission to worker reply. Timing includes embedding, retrieval, text loading and message handling; startup and DOM rendering are excluded. Model and decoded centroids stay loaded. This fixed-question p95 measures jitter, not question variation. Payload is $2.48$~MB of gzipped vectors and $0.77$~MB of Brotli text ($3.25$~MB), excluding HTTP headers.
 
-\paragraph{Synthetic vector retrieval.}
-At 32k/SQ6, four probes and $k=1$, vector retrieval takes $122/187$~ms (mean/p95), excluding embedding and text, with $98.1\%$ source recovery and $3.98$~MB of vectors. The fixed question uses $38\%$ fewer vector bytes; these separate runs cannot be added to estimate varied-question end-to-end latency.
-
 \paragraph{Text retrieval.}
 We measure $1{,}000$ groups of ten passages, using $10{,}000$ uniformly sampled distinct passage IDs. Text retrieval takes $34.9/54.9$~ms (mean/p95), covering parallel batch downloads, Brotli decompression and text decoding. DOM rendering is excluded; files are prefetched and browser/decoded-text caches are bypassed.
 
