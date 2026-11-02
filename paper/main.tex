@@ -141,10 +141,11 @@ Experiments use Ubuntu~22.04 on an Intel Core i5-12400F PC with 32~GB RAM and a 
 \paragraph{Embedding compatibility.}
 Re-embedding $1{,}000$ uniformly sampled passages with the q8 browser encoder yields mean and 5th-percentile cosine similarities of $0.9924$ and $0.9892$ to the stored vectors; this passage check does not validate question retrieval.
 
-FP16 probe sweeps use 2--5 probes at 8k and 2, 3, 4, 6, 8, 10 at 16k/32k; the 8k four-probe point reuses the original measurement. At 32k and four probes, we compare FP16, SQ8/SQ6/SQ4, symmetric INT8~\cite{Faiss}, and PQ4 with 4-bit codes per eight-component block~\cite{product-quantization}. Cluster assignments and FP16 passage vectors stay fixed. Shared configurations run once.
+\paragraph{Configurations.}
+FP16 probe sweeps use 2--5 probes at 8k and 2, 3, 4, 6, 8, 10 at 16k/32k. At 32k and four probes, we compare FP16, SQ8/SQ6/SQ4, symmetric INT8~\cite{Faiss}, and PQ4 with 4-bit codes per eight-component block~\cite{product-quantization}. Cluster assignments and FP16 passage vectors stay fixed. Shared configurations run once.
 
 \paragraph{Hosting and timing.}
-Vector and text files are prefetched to prime CDN caches. CDN residency and connections remain uncontrolled; browser-cache bypass does not establish a cold CDN. Timed routing searches return one passage, fetch up to ten clusters in parallel and bypass browser HTTP caches. Untimed accuracy checks allow cached clusters. Table~\ref{tab:latency-table} reports recovery, timing and payload on the same timed queries.
+Vector and text files are prefetched to prime CDN caches. CDN residency and connections remain uncontrolled. Timed routing searches return one passage, fetch up to ten clusters in parallel and bypass browser HTTP caches. Untimed accuracy checks allow cached clusters. Table~\ref{tab:latency-table} reports recovery, timing and payload on the same timed queries.
 
 
 Retrieval time includes routing, vector download, decompression, decoding and ranking; Sections~\ref{sec:text-retrieval}--\ref{sec:client-costs} report text retrieval, startup and total query costs. Centroids load once per configuration; separate download/decode benchmarks use \BenchmarkCentroidSamples{} trials per file. Tables give mean and $95$th-percentile (p95) times, and gzipped vector payload in decimal MB ($10^6$ bytes). Configuration order was randomised; the original seed and supplement order are recorded.
@@ -156,11 +157,11 @@ With FP16 centroids, four probes recover over $98\%$ of source passages at all t
 
 \input{figures/large-count-table}
 
-At 8k, two to five probes transfer $6.88$--$16.98$~MB/query with $95.4$--$98.7\%$ recovery. Figure~\ref{fig:recovery-bytes} reports gzipped vector payload, excluding startup and text, because file bytes are unaffected by network conditions during multi-day runs. Observed retrieval time scaled approximately linearly with payload over this range.
+Figure~\ref{fig:recovery-bytes} reports gzipped vector payload, excluding startup and text, because file bytes are unaffected by network conditions during multi-day runs. Observed retrieval time scaled approximately linearly with payload across the 8k probe settings.
 \begin{figure}[tb]
 \centering
 \includegraphics[width=\columnwidth]{recovery-bytes.pdf}
-\Description{Source recovery@1 in percent against mean gzipped vector payload in decimal megabytes per query for 8,192, 16,384 and 32,768 clusters with FP16 centroids and noise magnitude 0.4. Sixteen configurations are shown: probes 2, 3, 4 and 5 at 8k, and six settings each at 16k and 32k. The 8k four-probe measurement is retained from the original run. The recovery axis spans 93.5--99.5 percent. Small markers and probe labels distinguish the curves. Shaded bands join pointwise 95 percent Wilson intervals for recovery, not payload variation. Payload excludes startup assets, result text and HTTP headers. This metric is fixed by the selected files and unaffected by network conditions over long runs.}
+\Description{Source recovery@1 in percent against mean gzipped vector payload in decimal megabytes per query for 8,192, 16,384 and 32,768 clusters with FP16 centroids and noise magnitude 0.4. Sixteen configurations are shown: probes 2, 3, 4 and 5 at 8k, and six settings each at 16k and 32k. The recovery axis spans 93.5--99.5 percent. Small markers and probe labels distinguish the curves. Shaded bands join pointwise 95 percent Wilson intervals for recovery, not payload variation. Payload excludes startup assets, result text and HTTP headers. This metric is fixed by the selected files and unaffected by network conditions over long runs.}
 \caption{Recovery versus vector payload (FP16, $\alpha=0.4$; $10{,}000$ queries/setting). Shading joins pointwise $95\%$ Wilson intervals; labels mark probes.}
 \label{fig:recovery-bytes}
 \end{figure}
@@ -177,6 +178,7 @@ FP16, SQ8, SQ6, and INT8 differ by at most $0.09$ percentage points; paired sign
 \label{sec:text-retrieval}
 We measure $1{,}000$ groups of ten passages, using $10{,}000$ uniformly sampled distinct passage IDs. Text retrieval takes $34.9/54.9$~ms (mean/p95), covering parallel batch downloads, Brotli decompression and text decoding. We prefetch files and bypass browser and decoded-text caches. DOM rendering is excluded.
 
+\Needspace{10\baselineskip}
 \subsection{Client setup}
 Startup spans worker creation to model and 32k SQ6 centroid readiness, excluding navigation. Across $100$ fresh browser contexts in one Chromium process, it takes $2.46/2.53$~s (mean/p95). Model ($23.7$~MB), WebAssembly runtime ($14.3$~MB) and compressed centroids ($9.0$~MB) total about $47$~MB before HTTP compression. Loads overlap and bypass browser caching.
 
