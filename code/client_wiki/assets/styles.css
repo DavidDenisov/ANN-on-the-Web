@@ -45,7 +45,6 @@ button:disabled, input:disabled, select:disabled { cursor: not-allowed; opacity:
 .status { margin-top: 14px; padding: 12px 14px; border: 1px solid transparent; border-radius: 14px; background: #f1edf8; color: #514177; font-weight: 500; overflow-wrap: anywhere; }
 .status.success { background: linear-gradient(120deg, #eaffef, #c6f4d5); color: #14532d; border-color: #8bd6a5; }
 #status { margin: 0 0 20px; padding: 16px 18px; border-width: 2px; font-weight: 600; }
-#status, #searchBtn, #runAll { font-size: 2rem; }
 .status.error { background: #fff0ee; color: #a13429; border-color: #f2c3bb; }
 progress { width: 100%; height: 8px; margin-top: 12px; accent-color: var(--accent); }
 
