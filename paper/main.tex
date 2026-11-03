@@ -180,7 +180,7 @@ We measure $1{,}000$ groups of ten passages, using $10{,}000$ uniformly sampled 
 
 \subsection{Total query cost}
 \label{sec:client-costs}
-At 32k/SQ6 and four probes, vector retrieval averages $122.4$~ms and ten-passage text loading $34.9$~ms. Embedding averages $9.1$, $16.9$ and $33.8$~ms for $64$, $128$ and $256$ tokens, giving estimated totals of $166.4$, $174.1$ and $191.1$~ms, respectively. Estimates combine separate runs, excluding startup, rendering, messaging and extra ranking.
+At 32k/SQ6 and four probes, vector retrieval averages $122.4$~ms and ten-passage text loading $34.9$~ms. Embedding averages $9.1$, $16.9$ and $33.8$~ms for $64$, $128$ and $256$ tokens, giving estimated totals of $166.4$, $174.1$ and $191.1$~ms, respectively. The estimates sum the means of the three sequential stages from separate runs, excluding startup, rendering, messaging and extra ranking.
 
 \Needspace{10\baselineskip}
 \subsection{Client setup}
@@ -192,7 +192,7 @@ SQ8/PQ passage codes with optional rescoring could reduce vector transfer, but t
 
 At 32k, cluster sizes have median $1{,}023$, p95 $2{,}188$, and maximum $8{,}263$ passages. The four largest gzip files sum to $19.32$~MB, an upper bound for four probes.
 
-End-to-end latency across varied real questions, on mobile devices and on throttled networks remains unmeasured.
+The timings cover controlled workloads and one live question. Latency across diverse real questions, on mobile devices and on throttled networks remains unmeasured.
 
 \paragraph{Privacy threat model.}
 Assuming trusted client code and dependencies, query text and embeddings stay local. Model and runtime assets load from Hugging Face and jsDelivr. The host/CDN may link IP addresses and timing to four of $32{,}768$ cluster IDs and text-batch IDs. For uncached requests, intersecting these batches with downloaded candidate IDs may identify returned passages and help reconstruct the displayed result set; inference effectiveness is unmeasured. Displayed results do not establish which passages were read. Shared ID-based text batches support all three cluster counts. Co-location would avoid result-specific text requests but require one text layout per count, while selected clusters remain visible. PIR, as in Tiptoe~\cite{Tiptoe}, requires a different serving protocol.
