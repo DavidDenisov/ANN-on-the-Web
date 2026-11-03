@@ -215,7 +215,8 @@ for i, row in enumerate(r for r in count_rows if r['probes'] == '4'):
         lines.append(r'\rowcolor{black!4}')
     lines.append(f"{int(row['clusters'])} & {int(row['probes'])} & {100 * agreement(row):.2f} & "
                  f"{float(row['query_mean_ms']):.0f} / {float(row['query_p95_ms']):.0f} & "
-                 f"{float(row['bytes_per_query']) / 1e6:.2f}" + r' \\ \hline')
+                 f"{float(row['bytes_per_query']) / 1e6:.2f} / "
+                 f"{int(row['bytes_per_query_p95']) / 1e6:.2f}" + r' \\ \hline')
 (OUT / 'large-count-rows.tex').write_text('\n'.join(lines) + '\n')
 
 lines = []

@@ -2,7 +2,7 @@
 
 These compact files are copied from the completed runs used by the paper. They allow the figures to be regenerated without the corpus or full trial records. The corpus and original trial records are not included in this folder. The provenance paths below are relative to the original `code/data/benchmark/` directory, not files available in this manuscript bundle.
 
-- `retrieval-summary.csv`: original retrieval/accuracy run, from `retrieval/summary.csv`.
+- `retrieval-summary.csv`: original retrieval/accuracy run, from `retrieval/summary.csv`. The payload p95 is the nearest-rank percentile of per-query gzipped vector bytes in `retrieval/results.json`.
 - `centroid-summary.csv`: centroid setup run, from `centroid-setup/centroid-summary.csv`.
 - `32k-summary.csv`: completed supplement, from `remaining-32k-new/summary.csv`.
 - `32k-centroid-summary.csv`: supplement centroid measurements, from `remaining-32k-new/centroid-summary.csv`.
