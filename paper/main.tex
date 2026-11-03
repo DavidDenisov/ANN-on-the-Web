@@ -157,7 +157,7 @@ With FP16 centroids, four probes agree with exact search on at least $98.96\%$ o
 
 \input{figures/large-count-table}
 
-Figure~\ref{fig:agreement-bytes} reports gzipped vector payload, excluding startup and text, because file bytes are unaffected by network conditions during multi-day runs. Observed retrieval time scaled approximately linearly with payload across the 8k probe settings.
+Figure~\ref{fig:agreement-bytes} reports gzipped vector payload, excluding startup and text. Payload size is independent of network conditions, which can vary during runs. Observed retrieval time scaled approximately linearly with payload across probe settings.
 \begin{figure}[tb]
 \centering
 \includegraphics[width=\columnwidth]{agreement-bytes.pdf}
