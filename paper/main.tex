@@ -148,7 +148,7 @@ FP16 probe sweeps use 2--5 probes at 8k and 2, 3, 4, 6, 8, 10 at 16k/32k. At 32k
 Vector and text files are prefetched to prime CDN caches. CDN residency and connections remain uncontrolled. Timed routing searches return one passage, fetch up to ten clusters in parallel and bypass browser HTTP caches. Untimed accuracy checks allow cached clusters. Table~\ref{tab:latency-table} reports agreement, timing and payload on the same timed queries.
 
 
-Retrieval time includes routing, vector download, decompression, decoding and ranking; Sections~\ref{sec:text-retrieval}--\ref{sec:client-costs} report text retrieval, startup and total query costs. Centroids load once per configuration; separate download/decode benchmarks use \BenchmarkCentroidSamples{} trials per file. Tables give mean and $95$th-percentile (p95) times, and gzipped vector payload in decimal MB ($10^6$ bytes). Configuration order was randomised; the original seed and supplement order are recorded.
+Retrieval time includes routing, vector download, decompression, decoding and ranking; Sections~\ref{sec:text-retrieval}--\ref{sec:client-costs} report text retrieval, startup and total query costs. Centroids load once per configuration. Download and decode benchmarks use \BenchmarkCentroidSamples{} trials per file. Decode time includes gzip decompression. Tables give mean and $95$th-percentile (p95) times, and gzipped vector payload in decimal MB ($10^6$ bytes). Configuration order was randomised; the original seed and supplement order are recorded.
 \par
 
 
@@ -189,7 +189,7 @@ At 32k/SQ6 and four probes, vector retrieval averages $122.4$~ms and ten-passage
 \subsection{Trade-offs and limitations}
 SQ8/PQ passage codes with optional rescoring could reduce vector transfer, but their ranking quality is untested. A server returning text alone is also an unmeasured baseline.
 
-At 32k, cluster sizes have median $1{,}023$, p95 $2{,}188$, and maximum $8{,}263$ passages. The four largest gzip files sum to $19.32$~MB: a four-probe upper bound, not a query percentile; byte tails are unmeasured. Varied real-question end-to-end mean/p95/max, cold-connection/CDN trials and throttled/mobile profiles are needed before generalising desktop timings.
+At 32k, cluster sizes have median $1{,}023$, p95 $2{,}188$, and maximum $8{,}263$ passages. The four largest gzip files sum to $19.32$~MB, an upper bound for four probes. Varied real-question end-to-end mean/p95/max, cold-connection/CDN trials and throttled/mobile profiles are needed before generalising desktop timings.
 
 \paragraph{Privacy threat model.}
 Assuming trusted client code and dependencies, query text and embeddings stay local. Model and runtime assets load from Hugging Face and jsDelivr. The host/CDN may link IP addresses and timing to four of $32{,}768$ cluster IDs and text-batch IDs. For uncached requests, intersecting these batches with downloaded candidate IDs may identify returned passages and help reconstruct the displayed result set; inference effectiveness is unmeasured. Displayed results do not establish which passages were read. Shared ID-based text batches support all three cluster counts. Co-location would avoid result-specific text requests but require one text layout per count, while selected clusters remain visible. PIR, as in Tiptoe~\cite{Tiptoe}, requires a different serving protocol.
