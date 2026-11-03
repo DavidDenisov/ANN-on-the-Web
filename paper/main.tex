@@ -56,7 +56,7 @@ Conventional ANN systems keep index data on the machines that search it, in memo
 Our method uses an inverted file (IVF) index built with Faiss~\cite{Faiss}. The client fetches selected clusters and ranks their vectors. The demo uses free static CDN hosting, and all query-time computation runs on the client's machine.
 
 \subsection{Related work}
-This demo builds on an earlier public image-search website by the author, omitted here due to its content. The subsequent \href{https://pypi.org/project/annpack/0.1.6/}{\mbox{ANNPack} 0.1.x} also fetches selected vector clusters over the Web.
+This demo builds on the author's public image-search site, omitted due to its content. The subsequent \href{https://pypi.org/project/annpack/0.1.6/}{\mbox{ANNPack} 0.1.x} also fetches clusters over the Web. We add Wikipedia search and a lab.
 
 SPANN~\cite{spann} reduces local SSD reads with IVF posting lists and evaluates a variant that distributes the search load across machines, while our demo shifts the entire search load to the client. While Tiptoe~\cite[Section~4]{Tiptoe} also uses IVF-style client-side cluster selection, it later uses a dedicated ranking service that computes encrypted similarity scores, albeit without learning the selected clusters.
 
@@ -69,7 +69,7 @@ More broadly, \href{https://pagefind.app/}{Pagefind} (keyword search) and \href{
 Both pages use $35{,}167{,}920$ passages from Maloyan's December 2022 English Wikipedia snapshot~\cite{wiki-minilm}, giving visitors a broad choice of topics. A full index download would be impractical. Our method makes client-side search practical at this scale with only free static CDN hosting and no server-side query computation.
 
 \paragraph{Wikipedia search.}
-Visitors enter any text or questions of their choice and get ranked passages linked to Wikipedia (Figure~\ref{fig:search-demo}). Defaults are 32k clusters, SQ6 centroids, four probes and ten results. Controls offer three cluster counts, six centroid formats and $1$--$100$ probes. The page reports stage timings and vector downloads. At the poster, visitors can try the photosynthesis question with one and four probes and compare passages and vector downloads.
+Visitors enter any text or questions of their choice and get ranked passages linked to Wikipedia (Figure~\ref{fig:search-demo}). Defaults are 32k clusters, SQ6 centroids, four probes and ten results. Controls offer three cluster counts, six centroid formats and $1$--$100$ probes. The page reports stage timings. At the poster, visitors can try the photosynthesis question at one and four probes to compare results, passages checked and vector bytes.
 
 \paragraph{Clustering lab.}
 The lab (Figure~\ref{fig:lab-demo}) reports top-1 agreement with exhaustive Faiss search across noise presets, cluster counts, probes and centroid formats. Runs share a uniform sample of $1$--$10{,}000$ perturbed-passage queries (default $10$). Visitors can run a short lab check, which takes longer than a single search, and use Figure~\ref{fig:agreement-bytes} to see how probe count affects agreement and download size.
@@ -116,7 +116,7 @@ On the \href{https://developers.cloudflare.com/pages/functions/pricing/#static-a
 \begin{figure}[tb]
 \centering
 \includegraphics[width=0.85\columnwidth]{architecture.pdf}
-\Description{Step zero fetches and initializes the model, WebAssembly runtime and centroid files once, before query processing. The question then passes through five search steps: embedding the query, selecting clusters to probe by their centroids' L2 distances, fetching the selected cluster files, renormalising decoded passage vectors and ranking them by L2 distance to the query, and fetching text to display the top results. Arrows connect these steps. Three download arrows point from static CDN files into the browser: startup assets at initialization, passage IDs and FP16 vectors at the cluster-fetch step, and result-text batches at the final step. Loaded startup assets are reused across queries. Query text and embeddings stay local and are not uploaded.}
+\Description{Step zero fetches and initializes the model, WebAssembly runtime and centroid files once, before query processing. The question then passes through five search steps: embedding the query, selecting clusters to probe by their centroids' L2 distances, fetching the selected cluster files, renormalising decoded passage vectors and ranking them by L2 distance to the query, and fetching text to display the top results. Arrows connect these steps. Three download arrows point from static asset hosts into the browser: startup assets at initialization, passage IDs and FP16 vectors at the cluster-fetch step, and result-text batches at the final step. Loaded startup assets are reused across queries. Query text and embeddings stay local and are not uploaded.}
 \caption{Local query embedding and ranking, with model, runtime and centroid downloads at startup and selective vector and text downloads per query.}
 \label{fig:method}
 \end{figure}
@@ -124,7 +124,7 @@ On the \href{https://developers.cloudflare.com/pages/functions/pricing/#static-a
 
 \section{Supporting evaluation}
 \label{sec:comparison}
-We measure retrieval accuracy against exhaustive search. We time text retrieval separately in groups of ten passages.
+We measure top-1 agreement with exhaustive search on perturbed passage embeddings and time ten-passage text loads.
 
 \paragraph{Query setup.}
 Configurations share \BenchmarkQueryCount{} uniformly sampled distinct source passages. For each sampled passage, we draw a Gaussian vector $v\in\mathbb{R}^{384}$, rescale it to noise magnitude $\|v\|_2=\alpha$, add it to the passage's unit embedding, and renormalise to obtain the query. Routing tests use large noise ($\alpha=0.4$). The lab also offers medium ($0.15$) and small ($0.05$) noise.
@@ -196,7 +196,7 @@ The timings cover controlled workloads and one live question. Latency across div
 The open-source client processes query text and embeddings locally. Model and runtime assets load from Hugging Face and jsDelivr. A host or CDN can link IP addresses and timing to requested cluster and text-batch IDs. Network observers may infer the IDs from encrypted traffic sizes and timing. Browser caches can hide requests. With the decoded centroids and the full set of selected clusters, rearranging the distance comparisons gives linear inequalities defining the possible query embeddings. On our test machine, construction took under a second for one query with 32k clusters and four probes, excluding centroid decoding and norm computation. Intersecting passage IDs from requested clusters and text batches may allow reconstruction of some or all of the displayed results. How much can be recovered remains an open question. The same unordered file IDs can be consistent with different result sets. Co-location would avoid result-specific text requests but require one text layout per count, while selected clusters remain visible. PIR, as in Tiptoe~\cite{Tiptoe}, requires a different serving protocol.
 
 \section{Conclusion}
-Most ANN work focuses on minimising the local search load. Even systems that reduce data transfer, such as SPANN~\cite{spann}, or bring search to the Web, such as WebANNS~\cite{WebANNS}, keep the index data on the same machines that search it. Our demo shifts the entire IVF search load to the client that submits the query, while a static CDN hosts the data separately. We show the trade-offs between agreement with exact search and latency/bandwidth. We hope this approach will be useful for RAG systems and for server deployments, where network speeds can be significantly higher than in our setup.
+Most ANN work focuses on minimising the local search load. Even systems that reduce SSD reads, such as SPANN~\cite{spann}, or bring search to the Web, such as WebANNS~\cite{WebANNS}, keep the index data on the same machines that search it. Our demo shifts the entire IVF search load to the client that submits the query, while a static CDN hosts the data separately. We show the trade-offs between agreement with exact search and latency/bandwidth. We hope this approach will be useful for RAG systems and for server deployments, where network speeds can be significantly higher than in our setup.
 
 \Needspace{18\baselineskip}
 \section{Ethical use of data}
