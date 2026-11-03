@@ -56,5 +56,19 @@
     "max_ms": 964.2600000000093
   },
   "modelBytes": 23685047,
-  "runtimeBytes": 14289219
+  "runtimeBytes": 14289219,
+  "modelWeightsDownloadMs": {
+    "samples": 100,
+    "mean_ms": 1443.4613999999965,
+    "p95_ms": 1486.3150000000023,
+    "min_ms": 1382.4549999999872,
+    "max_ms": 1514.2249999999767
+  },
+  "wasmBinaryDownloadMs": {
+    "samples": 100,
+    "mean_ms": 324.3343499999965,
+    "p95_ms": 377.82499999998254,
+    "min_ms": 289.72000000003027,
+    "max_ms": 686.6949999999924
+  }
 }

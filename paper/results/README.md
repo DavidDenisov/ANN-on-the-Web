@@ -10,7 +10,7 @@ These compact files are copied from the completed runs used by the paper. They a
 - `8k-centroid-summary.csv`: its 1,000-trial FP16 centroid setup, from `8k-p235-new/centroid-summary.csv`.
 - `startup-summary.json`: 100 elapsed 32k/SQ6 worker startups, from `remaining-32k-new/startup/summary.json`.
 - `query-example.json`: fixed-question top-10 results and component/total timings, from `live-query-warm/summary.json`.
-- `embedding-summary.json`: inference timings by token length, from `encoder/inference/summary.json`.
+- `embedding-summary.json`: inference and setup timings from `encoder/inference/summary.json`. Model weight and WebAssembly binary download timings use the per-file samples in `encoder/inference/results.json`.
 - `result-text-summary.json`: 1,000 varied ten-result text loads, from `result-text/summary.json`.
 - `compatibility-summary.json`: 1,000-passage browser/stored-vector comparison, from `encoder/compatibility-1k/summary.json`.
 - `nearest-neighbour-summary.json`: exact full-corpus geometry for 1,000 sources, from `full-nearest-gpu/summary.json`.
