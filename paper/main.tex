@@ -51,14 +51,14 @@ We demonstrate browser-based approximate nearest neighbour (ANN) search over $35
 \section{Introduction}
 Given a dataset of vectors and a query vector, $k$-nearest neighbour (kNN) retrieval finds the $k$ dataset vectors closest to the query under a chosen distance metric (Euclidean distance in our demo). Approximate nearest neighbour (ANN) search is used to speed up this task on large collections, at the cost of potentially missing some of the true nearest neighbours. In retrieval-augmented generation (RAG), ANN search is used to retrieve passages that a language model uses as context to generate an answer~\cite{lewis2020rag}.
 
-Conventional ANN systems keep the index on the machine that runs the search, in memory or on disk~\cite{DiskANN,spann}. On the Web, this typically means running search on a server or downloading the full index to the browser, which would yield prohibitively large data transfer for our corpus. The FP16 vectors for our $35.2$ million Wikipedia passages alone occupy about $27$~GB before compression.
+Conventional ANN systems keep index data on the machines that search it, in memory or on disk~\cite{DiskANN,spann}. On the Web, this typically means running search on a server or downloading the full index to the browser, which would yield prohibitively large data transfer for our corpus. The FP16 vectors for our $35.2$ million Wikipedia passages alone occupy about $27$~GB before compression.
 
 Our method uses an inverted file (IVF) index built with Faiss~\cite{Faiss}. The client fetches selected clusters and ranks their vectors. The demo uses free static CDN hosting, and all query-time computation runs on the client's machine.
 
 \subsection{Related work}
 This demo builds on an earlier public image-search website by the author, omitted here due to its content. The subsequent \href{https://pypi.org/project/annpack/0.1.6/}{\mbox{ANNPack} 0.1.x} also fetches selected vector clusters over the Web.
 
-SPANN~\cite{spann} demonstrates IVF search over vectors stored on a local SSD. Our demo applies the same idea to cluster files hosted on a CDN, allowing storage beyond a single machine. Tiptoe~\cite[Section~4]{Tiptoe} uses IVF-style cluster selection and computes similarity scores under encryption on a dedicated server.
+SPANN~\cite[Section~4.3]{spann} routes queries to selected machines with local SSD indexes. Our browser fetches and searches selected clusters hosted on a static CDN. Tiptoe~\cite[Section~4]{Tiptoe} uses IVF-style cluster selection and computes similarity scores under encryption on a dedicated server.
 
 DiskANN~\cite{DiskANN} computes ANN by traversing a graph (stored on SSD). MeMemo~\cite{MeMemo} and WebANNS~\cite{WebANNS} keep graph indexes in browser RAM and IndexedDB; WebANNS evaluates up to $480{,}000$ passages. Importing our remote corpus into such local indexes would require a large initial data transfer; we avoid that import by fetching only selected clusters.
 
@@ -196,7 +196,7 @@ The timings cover controlled workloads and one live question. Latency across div
 The open-source client processes query text and embeddings locally. Model and runtime assets load from Hugging Face and jsDelivr. A host, CDN or network observer may link IP addresses and timing to the IDs of requested clusters and text batches. With known centroids, the requested clusters immediately define the region of query embeddings for which those centroids are the nearest. This follows from rearranging the distance comparisons into linear inequalities, which can be constructed in under a second for 32k clusters and four probes. Given the requested clusters and batches, it may be possible to reconstruct the displayed result set or part of it, though how much can be recovered remains an open question. The same unordered file IDs can be consistent with different result sets. Co-location would avoid result-specific text requests but require one text layout per count, while selected clusters remain visible. PIR, as in Tiptoe~\cite{Tiptoe}, requires a different serving protocol.
 
 \section{Conclusion}
-SPANN~\cite{spann} showed that IVF search can use a local SSD. Our demo extends IVF-based ANN search beyond a single machine by fetching selected clusters from a static CDN over the Internet, enabling browser search across $35.2$ million passages. The evaluation shows the trade-offs among agreement with exact search, latency, and bandwidth. We hope this approach will be useful for RAG systems and for server deployments, where network speeds can be significantly higher than in our measurements.
+SPANN~\cite{spann} extends IVF search across SSD-backed search servers. Our demo shows how a browser can search $35.2$ million passages with IVF-based ANN by fetching selected clusters from a static CDN over the Internet. The evaluation shows the trade-offs among agreement with exact search, latency, and bandwidth. We hope this approach will be useful for RAG systems and for server deployments, where network speeds can be significantly higher than in our measurements.
 
 \Needspace{18\baselineskip}
 \section{Ethical use of data}
