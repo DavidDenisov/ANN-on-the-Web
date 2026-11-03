@@ -44,7 +44,7 @@
       <p class="fixture-info" id="fixtureInfo">Loading benchmark…</p>
       <label for="queryCount">Queries per configuration</label>
       <input id="queryCount" type="number" min="1" max="10000" step="1" value="10" required aria-describedby="queryCountHint labWarning">
-      <p class="query-help" id="queryCountHint">Paper runs: 10,000.</p>
+      <p class="query-help" id="queryCountHint">Paper runs use 10,000.</p>
       </fieldset>
       <p class="query-help" id="labWarning"><strong>Downloads:</strong> Hundreds of MB or more.</p>
       <button class="btn btn-primary" id="runAll" type="button" aria-describedby="labWarning" disabled>Run all checks</button>
@@ -53,7 +53,7 @@
       <progress id="labProgress" max="1" value="0" hidden aria-label="Benchmark progress"></progress>
       <details><summary>What is measured?</summary>
         <p>Short runs share one random subset across configurations; reruns draw a new subset. Small samples illustrate behavior; paper measurements use all 10,000 queries. Each check compares several configurations. Full 10,000-query checks can take hours and transfer hundreds of GB.</p>
-        <p id="metricDescription">Source recovery@1 is the fraction of noisy queries whose original passage is the first result. Even a full scan may miss the original if noise moves another passage closer.</p>
+        <p id="metricDescription">Top-1 agreement is the fraction of queries for which the browser returns the same first passage as an exhaustive Faiss search over the full corpus.</p>
         <p>Each test runs one pass over its queries, loading its centroids once before timing. Query latency includes routing, cluster transfer, decompression, decoding and scoring; centroid loading and embedding are excluded.</p>
         <p>The compression accuracy check uses four probes and one pass, with caching allowed only for cluster files. Centroids bypass browser caching. It keeps cluster membership fixed and does not report query latency.</p>
       </details>
@@ -61,18 +61,18 @@
     <div class="experiments" id="experiments" aria-busy="false">
       <section class="panel experiment" aria-labelledby="countHeading">
         <div class="experiment-heading"><div><span class="step">01</span><h2 id="countHeading">Cluster count</h2></div><button class="btn btn-secondary run-check" data-check="counts" disabled>Run check</button></div>
-        <p>Compare all three cluster counts at 1, 4 and 8 probes, using float16 centroids.</p>
-        <div class="table-scroll"><table><caption class="sr-only">Cluster count measurements</caption><thead><tr><th>Clusters</th><th>Probes</th><th>Vectors / cluster</th><th>Source recovery</th><th>Search mean / p95</th><th>Download / query</th></tr></thead><tbody id="countsRows"><tr class="empty"><td colspan="6">Run this check to measure the tradeoff.</td></tr></tbody></table></div>
+        <p>Compare 8,192 clusters at 2, 3, 4 and 5 probes, and 16,384/32,768 at 1, 4 and 8, using float16 centroids.</p>
+        <div class="table-scroll"><table><caption class="sr-only">Cluster count measurements</caption><thead><tr><th>Clusters</th><th>Probes</th><th>Vectors / cluster</th><th>Top-1 agreement</th><th>Search mean / p95</th><th>Download / query</th></tr></thead><tbody id="countsRows"><tr class="empty"><td colspan="6">Run this check to measure the tradeoff.</td></tr></tbody></table></div>
       </section>
       <section class="panel experiment" aria-labelledby="probeHeading">
         <div class="experiment-heading"><div><span class="step">02</span><h2 id="probeHeading">Clusters searched</h2></div><button class="btn btn-secondary run-check" data-check="probes" disabled>Run check</button></div>
-        <p>Compare 1, 2, 3, 4, 6, 8 and 10 probes at 16,384 clusters.</p>
-        <div class="table-scroll"><table><caption class="sr-only">Probe budget measurements</caption><thead><tr><th>Clusters probed</th><th>Candidates</th><th>Source recovery</th><th>Search mean / p95</th><th>Download / query</th></tr></thead><tbody id="probesRows"><tr class="empty"><td colspan="5">Run this check to measure the tradeoff.</td></tr></tbody></table></div>
+        <p>Compare 1, 2, 3, 4, 6, 8 and 10 probes at 32,768 clusters.</p>
+        <div class="table-scroll"><table><caption class="sr-only">Probe budget measurements</caption><thead><tr><th>Clusters probed</th><th>Candidates</th><th>Top-1 agreement</th><th>Search mean / p95</th><th>Download / query</th></tr></thead><tbody id="probesRows"><tr class="empty"><td colspan="5">Run this check to measure the tradeoff.</td></tr></tbody></table></div>
       </section>
       <section class="panel experiment" aria-labelledby="codecHeading">
         <div class="experiment-heading"><div><span class="step">03</span><h2 id="codecHeading">Centroid compression</h2></div><button class="btn btn-secondary run-check" data-check="codecs" disabled>Run check</button></div>
-        <p>Source recovery and centroid loading at 16,384 clusters and four probes. Cluster files may use browser caching; centroids bypass it.</p>
-        <div class="table-scroll"><table><caption class="sr-only">Centroid compression results</caption><thead><tr><th>Format</th><th>Probes</th><th>File size</th><th>Download</th><th>Decode</th><th>Source recovery</th></tr></thead><tbody id="codecsRows"><tr class="empty"><td colspan="6">Run this check to measure the tradeoff.</td></tr></tbody></table></div>
+        <p>Top-1 agreement and centroid loading at 32,768 clusters and four probes. Cluster files may use browser caching. Centroids bypass it.</p>
+        <div class="table-scroll"><table><caption class="sr-only">Centroid compression results</caption><thead><tr><th>Format</th><th>Probes</th><th>File size</th><th>Download</th><th>Decode</th><th>Top-1 agreement</th></tr></thead><tbody id="codecsRows"><tr class="empty"><td colspan="6">Run this check to measure the tradeoff.</td></tr></tbody></table></div>
         <p class="footnote">Query timings are omitted for this accuracy-only check.</p>
       </section>
       <p class="measurement-note" id="measurementNote">Queries and results are measured in your browser using the uploaded Wikipedia vectors.</p>

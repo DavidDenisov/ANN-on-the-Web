@@ -1,4 +1,4 @@
-import { loadSuite, warmIndexAssets, benchmark, verifyHostingManifest, PAPER_SETTINGS, paperPlan } from './benchmark.mjs';
+import { loadSuite, warmIndexAssets, benchmark, exactTop1ForSuite, verifyHostingManifest, PAPER_SETTINGS, paperPlan } from './benchmark.mjs';
 import { loadIndex, loadCentroids, internetAssetUrl, CODEC_LABELS } from './retrieval.mjs';
 
 const requireValue = (condition, message) => { if (!condition) throw new Error(message); };
@@ -102,6 +102,7 @@ async function run() {
       requireValue(suite.id === config.fixture_ids[item.label],
         `The ${item.label} hosted fixture does not match the prepared local data. Upload this run's complete data directory.`);
       requireValue(suite.noise.level === item.noise, 'The prepared suite has the wrong noise level.');
+      suite.exactTop1Ids = exactTop1ForSuite(suite, config.exact_references);
       if (reference) {
         requireValue(suite.truthData.every((id, i) => id === reference.truthData[i]),
           'All noise levels must share the same query source IDs.');
@@ -156,7 +157,7 @@ async function run() {
       + `probe sweeps at ${config.probe_cluster_counts.join(', ')} clusters; ${Object.keys(CODEC_LABELS).length} centroid formats. `
       + `${plan.filter(item => !item.accuracy_only).length} latency configurations × 1 pass; `
       + `${plan.filter(item => item.accuracy_only).length} cached accuracy checks × 1 pass. ${config.query_count} queries each. `
-      + `Accuracy: source recovery@${config.k}.`;
+      + 'Accuracy uses top-1 agreement where an exact reference is available.';
     const rows = [];
     for (const [position, item] of plan.entries()) {
       const suite = suites.get(item.noise_label);
@@ -171,12 +172,13 @@ async function run() {
       });
       result.hosting_bundle_id = config.hosting_bundle_id;
       await save({ noise_label: item.noise_label, memberships: item.memberships, result, user_agent: navigator.userAgent });
-      const { codec, clusters, probes, recall, queryMs, accuracy_only } = result;
-      rows.unshift({ noise: item.noise_label, result: { codec, clusters, probes, recall, queryMs, accuracy_only } });
+      const { codec, clusters, probes, recall, top1_agreement, queryMs, accuracy_only } = result;
+      rows.unshift({ noise: item.noise_label, result: { codec, clusters, probes, recall, top1_agreement, queryMs, accuracy_only } });
       if (rows.length > 20) rows.pop();
       $('runRows').replaceChildren(...rows.map(row => {
         const tr = document.createElement('tr');
         for (const value of [row.noise, CODEC_LABELS[row.result.codec], row.result.clusters, row.result.probes,
+          row.result.top1_agreement === undefined ? 'Unavailable' : (100 * row.result.top1_agreement).toFixed(2) + '%',
           `${(100 * row.result.recall).toFixed(1)}%`,
           row.result.accuracy_only ? 'Accuracy only (cache allowed)'
             : `${row.result.queryMs.mean.toFixed(2)} / ${row.result.queryMs.p95.toFixed(2)} ms`]) {

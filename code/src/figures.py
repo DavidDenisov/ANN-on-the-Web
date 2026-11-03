@@ -27,30 +27,38 @@ STYLE = {"font.family": "serif", "font.size": 9, "axes.labelsize": 9,
          "pdf.fonttype": 42, "mathtext.fontset": "dejavuserif"}
 
 
-def _accuracy_value(trials):
-    return f"{statistics.mean(t['recall'] for t in trials) * 100:.1f}".rstrip("0").rstrip(".")
+def _accuracy(row, use_agreement):
+    if use_agreement:
+        return row["top1_agreement"]
+    return statistics.mean(trial["recall"] for trial in row["trials"])
 
 
-def _latency_cells(rows):
+def _accuracy_value(row, use_agreement):
+    precision = 2 if use_agreement else 1
+    return f"{_accuracy(row, use_agreement) * 100:.{precision}f}".rstrip("0").rstrip(".")
+
+
+def _latency_cells(rows, use_agreement):
     cells = []
     for row in sorted(rows, key=lambda row: (row["clusters"], row["probes"])):
         trials = row["trials"]
         times = sorted(trial["queryMs"] for trial in trials)
         cells.append([str(row["clusters"]), str(row["probes"]),
-                      _accuracy_value(trials),
+                      _accuracy_value(row, use_agreement),
                       f"{statistics.mean(times):.0f}", f"{times[math.ceil(len(times) * .95) - 1]:.0f}",
                       f"{statistics.mean(t['bytes'] for t in trials) / 1e6:.2f}"])
     return cells
 
 
-def _latency_comparison_table(report, grouped):
+def _latency_comparison_table(report, grouped, use_agreement):
     headers = ["Clusters", "Probes"]
     values = {}
     for suite in report["config"]["suites"]:
         label = suite["label"]
-        headers += [f"{label.capitalize()}\nRecovery (%)", f"{label.capitalize()}\nTime (ms)\nmean / p95",
+        accuracy_label = "Agreement" if use_agreement else "Recovery"
+        headers += [f"{label.capitalize()}\n{accuracy_label} (%)", f"{label.capitalize()}\nTime (ms)\nmean / p95",
                     f"{label.capitalize()}\nDownload\n(MB/query)"]
-        values[label] = {tuple(cell[:2]): cell[2:] for cell in _latency_cells(grouped[label]["counts"])}
+        values[label] = {tuple(cell[:2]): cell[2:] for cell in _latency_cells(grouped[label]["counts"], use_agreement)}
     cells = []
     for key in sorted(next(iter(values.values())), key=lambda key: tuple(map(int, key))):
         cell = list(key)
@@ -61,14 +69,15 @@ def _latency_comparison_table(report, grouped):
     return headers, cells
 
 
-def _compression_table(groups):
-    headers = ["Format"] + [f"{label.capitalize()}\nSource recovery (%)" for label in groups]
+def _compression_table(groups, use_agreement):
+    accuracy_label = "Top-1 agreement" if use_agreement else "Source recovery"
+    headers = ["Format"] + [f"{label.capitalize()}\n{accuracy_label} (%)" for label in groups]
     cells = []
     for codec, label in CODECS.items():
         values = [label]
         for rows in groups.values():
-            trials = [trial for row in rows if row["codec"] == codec for trial in row["trials"]]
-            values.append(_accuracy_value(trials))
+            row, = (row for row in rows if row["codec"] == codec)
+            values.append(_accuracy_value(row, use_agreement))
         cells.append(values)
     return headers, cells
 
@@ -169,6 +178,8 @@ def _validated_comparison(report):
         if _asset_base(raw.get("asset_base_url")) != _asset_base(config.get("assets_base_url")):
             raise ValueError("Measurement asset host and path must match the run")
         row = validate_result(measurement.get("result"))
+        if "top1_agreement" in raw:
+            row["top1_agreement"] = finite_number(raw["top1_agreement"], "top-1 agreement", maximum=1)
         if row.get("metric") != "source-recovery":
             raise ValueError("Comparison measurements must use source recovery")
         if (any(row[key] != value for key, value in fixed.items())
@@ -195,7 +206,7 @@ def _validated_comparison(report):
     return grouped
 
 
-def _probe_figure_16k(report, grouped):
+def _probe_figure_16k(report, grouped, use_agreement):
     figure = Figure(figsize=(7, 3.3))
     FigureCanvasAgg(figure)
     axes = figure.subplots(2, 3, sharex="col")
@@ -207,7 +218,7 @@ def _probe_figure_16k(report, grouped):
         quartiles = [statistics.quantiles((t["queryMs"] / 100 for t in row["trials"]),
                                          n=4, method="inclusive") for row in rows]
         medians = [q[1] for q in quartiles]
-        accuracy = [100 * statistics.mean(t["recall"] for t in row["trials"]) for row in rows]
+        accuracy = [100 * _accuracy(row, use_agreement) for row in rows]
         maximum = max(maximum, max(q[2] for q in quartiles))
         minimum = min(minimum, min(q[0] for q in quartiles))
         axes[0, column].fill_between(probes, [q[0] for q in quartiles], [q[2] for q in quartiles],
@@ -232,7 +243,7 @@ def _probe_figure_16k(report, grouped):
     for axis in axes[0]:
         axis.set_ylim(max(0, minimum - padding), maximum + padding)
         axis.yaxis.set_major_locator(MaxNLocator(6))
-    axes[1, 0].set_ylabel("Source recovery (%)")
+    axes[1, 0].set_ylabel("Top-1 agreement (%)" if use_agreement else "Source recovery (%)")
     figure.tight_layout(rect=(0, 0, 1, .98), h_pad=.7, w_pad=.7)
     return figure
 
@@ -265,11 +276,13 @@ def _write_table(directory, name, result, caption):
     if wide:
         labels = [headers[index].split("\n")[0] for index in range(2, len(headers), 3)]
         groups = [r"\multicolumn{3}{c|}{" + label + " noise}" for label in labels]
+        accuracy_heading = headers[2].split("\n")[1].replace("%", r"\%")
         lines += ["Clusters & Probes & " + " & ".join(groups) + r"\\",
                   r"\cline{3-" + str(len(headers)) + "}",
-                  " & & " + " & ".join([r"Recovery (\%)", "Time (ms)", "MB/query"] * len(labels)) + r"\\"]
+                  " & & " + " & ".join([accuracy_heading, "Time (ms)", "MB/query"] * len(labels)) + r"\\"]
     else:
         headings = [header.replace("\n", " ").replace("Source recovery (%)", r"(\%)")
+                    .replace("Top-1 agreement (%)", r"(\%)")
                     .replace(" mean / p95", "") for header in headers]
         lines.append(" & ".join(headings) + r"\\")
     lines.append(r"\hline")
@@ -321,6 +334,7 @@ def export_figures(report: dict, output: Path) -> Path:
                 raise ValueError("Centroid sample count does not match the run")
     else:
         grouped = _validated_comparison(report)
+        use_agreement = all("top1_agreement" in item["result"] for item in report["measurements"])
     output = Path(output)
     if output.exists():
         raise FileExistsError(f"Refusing to overwrite {output}")
@@ -331,15 +345,16 @@ def export_figures(report: dict, output: Path) -> Path:
         with matplotlib.rc_context(STYLE):
             _write_centroid_tables(staged, report)
             if not centroid_only:
-                _write_table(staged, "latency-table", _latency_comparison_table(report, grouped),
-                             "FP16 source recovery@1, vector retrieval latency and downloaded payload across cluster counts and noise levels. "
+                accuracy_label = "top-1 agreement" if use_agreement else "source recovery@1"
+                _write_table(staged, "latency-table", _latency_comparison_table(report, grouped, use_agreement),
+                             f"FP16 {accuracy_label}, vector retrieval latency and downloaded payload across cluster counts and noise levels. "
                              f"Queries per noise level: {report['config']['query_count']:,}. "
                              "Times are mean / p95.")
                 groups = {suite["label"]: grouped[suite["label"]]["codecs"] for suite in report["config"]["suites"]}
-                _write_table(staged, "compression-table", _compression_table(groups),
-                             "Source recovery@1 by centroid format at 16,384 clusters and four probes. "
+                _write_table(staged, "compression-table", _compression_table(groups, use_agreement),
+                             f"{accuracy_label.capitalize()} by centroid format at 16,384 clusters and four probes. "
                              f"{report['config']['query_count']:,} queries per noise level.")
-                figure = _probe_figure_16k(report, grouped)
+                figure = _probe_figure_16k(report, grouped, use_agreement)
                 figure.savefig(staged / "probes-c16384.pdf", format="pdf",
                                metadata={"CreationDate": None, "ModDate": None})
         if output.exists():

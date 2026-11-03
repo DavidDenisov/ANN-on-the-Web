@@ -7,12 +7,12 @@ import { CODEC_LABELS, CLUSTER_COUNTS, CLUSTER_FETCH_CONCURRENCY, networkPolicy,
  * @typedef {{mean: number, p95: number}} TimingSummary
  * @typedef {{url: string, dimensions: number, count: number, metric: string, truth_k: number,
  *   query_count: number, id: string, noise: {level: number}, queriesData: Float32Array,
- *   truthData: Uint32Array, indexes: {clusters: number, path: string, url: string}[]}} LoadedSuite
+ *   truthData: Uint32Array, exactTop1Ids?: Uint32Array, indexes: {clusters: number, path: string, url: string}[]}} LoadedSuite
  * @typedef {{repeat: number, query: number, recall: number, targetId: number, resultIds: number[],
  *   candidates: number, bytes: number, selectedClusters: number[], queryMs?: number,
  *   downloads: (Omit<import('./retrieval.mjs').VectorDownload, 'downloadMs'|'retries'> & {downloadMs?: number, retries?: number})[]}} QueryTrial
  * @typedef {import('./retrieval.mjs').CentroidSetup & {probes: number, k: number,
- *   queries: number, repeats: number, recall: number, trials: QueryTrial[], centroidBytes: number,
+ *   queries: number, repeats: number, recall: number, top1_agreement?: number, trials: QueryTrial[], centroidBytes: number,
  *   centroidDownloadMs: TimingSummary, centroidDecodeMs: TimingSummary, bytesPerQuery: number,
  *   candidatesMean: number, metric: 'source-recovery', noise: LoadedSuite['noise'], fixture_id?: string,
  *   network_mode?: import('./retrieval.mjs').NetworkOptions['networkMode'],
@@ -76,6 +76,21 @@ const requireValue = (condition, message) => { if (!condition) throw new Error(m
 const resolveUrl = (path, base = globalThis.location?.href) => new URL(path, base).href;
 const mean = values => values.reduce((sum, value) => sum + value, 0) / values.length;
 const summary = values => ({ mean: mean(values), p95: [...values].sort((a, b) => a - b)[Math.ceil(values.length * 0.95) - 1] });
+
+export function exactTop1ForSuite(suite, references) {
+  const reference = references?.[suite.id];
+  if (reference === undefined) return undefined;
+  requireValue(reference?.fixture_id === suite.id && reference.noise_level === suite.noise.level
+    && reference.passages === suite.count && reference.queries === suite.query_count
+    && Array.isArray(reference.exact_top1_ids) && reference.exact_top1_ids.length === suite.query_count
+    && reference.exact_top1_ids.every(id => integer(id, 0) && id < suite.count),
+  'The exact Faiss reference does not match this query fixture.');
+  return Uint32Array.from(reference.exact_top1_ids);
+}
+
+export function top1Agreement(trials, exactTop1Ids) {
+  return trials.filter(trial => trial.resultIds[0] === exactTop1Ids[trial.query]).length / trials.length;
+}
 
 /**
  * @param {string|URL} path
@@ -248,6 +263,7 @@ export async function benchmark(index, suite, {
   policy.signal?.throwIfAborted();
   const recall = mean(trials.map(trial => trial.recall));
   return { codec, metric: 'source-recovery', network_mode: networkMode, ...(suite.id ? { fixture_id: suite.id } : {}),
+    ...(suite.exactTop1Ids ? { top1_agreement: top1Agreement(trials, suite.exactTop1Ids) } : {}),
     ...(networkMode === 'internet' ? { asset_base_url: assetsBaseUrl, asset_base_urls: policy.assetsBaseUrls } : {}),
     noise: suite.noise,
     clusters: index.clusters, probes, k, queries: queryCount, repeats: 1, recall,

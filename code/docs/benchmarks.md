@@ -17,7 +17,7 @@ python3 code/src/run_comparisons.py \
 
 Choose a new output directory for every run. Keep the browser tab active; the server stops when the run finishes. `--no-browser` prints the URL without opening it. The hosting manifest supplies the asset roots and bundle identity; the runner checks them against the prepared suites and index hashes before measuring.
 
-The defaults use all 35,167,920 passages, 10,000 query sources per noise level, and source recovery@1:
+The defaults use all 35,167,920 passages and 10,000 queries per noise level. The primary accuracy metric is top-1 agreement with exhaustive Faiss search.
 
 - Cluster counts: 8,192 at 2, 3, 4 and 5 probes; 16,384 and 32,768 at 1, 4 and 8 probes.
 - Probe sweep: 1, 2, 3, 4, 6, 8 and 10 probes at 16,384 clusters.
@@ -37,7 +37,7 @@ python3 code/src/run_comparisons.py \
 
 `--8k-probes` runs only FP16 at 8,192 clusters and noise magnitude 0.4, with all 10,000 original queries per setting. It warms only the 8k index, measures its FP16 centroid setup, and saves `results.json`, `summary.csv` and `centroid-summary.csv` in a new directory. It skips 16k/32k, other noise levels and the full-matrix figure export. Use the retained four-probe result from the same preparation when combining summaries; add `4` to the flag only if you want to measure it again. This checkout excludes the original prepared data and hosting manifest, so substitute their actual paths.
 
-Shared latency settings run once. The fixed matrix contains 42 latency configurations and 18 accuracy checks: 600,000 searches in total. The corpus, query count, probe sweeps, noise levels, formats and source recovery@1 are fixed by the runner.
+Shared latency settings run once. The fixed matrix contains 42 latency configurations and 18 accuracy checks, or 600,000 searches in total.
 
 Queries are normalized source-passage vectors plus Gaussian noise of L2 length 0.05, 0.15 or 0.4, then normalized again. All levels share source passages, random vectors and trained indexes. The original passage remains indexed. Source recovery@1 is the fraction of queries returning their source passage first; this tests robustness to perturbations rather than relevance to natural-language questions.
 
@@ -67,7 +67,7 @@ python3 code/src/exact_recovery.py \
 
 The shard scan checks the dataset revision and row offsets against the query suite, then uses the same FP16 conversion as the cluster exporter. An exhaustive scan can group passages into shard batches because it visits every vector. This command runs offline and needs no cluster files.
 
-Add `--exact /path/to/exact-large.json` to a browser comparison command to export `top1-agreement.csv` for matching fixtures. To score completed runs from the repository root, use:
+The runner and lab load exact top-1 IDs bundled for the three published query fixtures. The runner validates agreement before saving each configuration and exports it in `summary.csv` and `top1-agreement.csv`. The runner also records source recovery as a secondary measure. For another fixture, add `--exact /path/to/exact.json` to supply its reference. To score completed runs from the repository root, use:
 
 ~~~sh
 python3 code/src/score_agreement.py \
@@ -76,7 +76,23 @@ python3 code/src/score_agreement.py \
   --output /path/to/top1-agreement.csv
 ~~~
 
-Use `--result` for standalone per-configuration JSON files. The scorer checks fixture identity, query coverage and source IDs before comparing the browser's first passage ID with the exact first passage ID. The paper uses the high-noise fixture. Supply separate exact references for other noise levels when scoring them. The live lab reports source recovery using the original passage IDs.
+Use `--result` for standalone per-configuration JSON files. The scorer checks fixture identity, query coverage and source IDs before comparing the browser's first passage ID with the exact first passage ID. Each noise level requires its own reference. The paper uses the high-noise fixture.
+
+To rebuild the browser reference bundle after regenerating the three Faiss results, run from the repository root:
+
+~~~sh
+PYTHONPATH=code/src python3 - /path/to/exact-small.json /path/to/exact-medium.json /path/to/exact-large.json <<'PYCODE'
+import json
+from pathlib import Path
+import sys
+from score_agreement import browser_references, load_references
+
+references = browser_references(load_references(map(Path, sys.argv[1:])))
+Path("code/client_wiki/assets/exact-top1.json").write_text(json.dumps(references, separators=(",", ":")) + "\n")
+PYCODE
+~~~
+
+The bundle contains one passage ID per query plus fixture metadata. The lab checks the matching fixture before using those IDs.
 
 ## Prepare and upload new indexes
 
@@ -134,7 +150,7 @@ Query timing covers centroid routing, cluster download, gzip decompression, pass
 
 The generated headers allow CORS and Resource Timing. Gzip files are served without `Content-Encoding` and decompressed explicitly in the browser. New packages use `Cache-Control: public, max-age=0, s-maxage=604800, no-transform`; existing deployments retain their own headers until redeployed. Complete response bodies are timed. Payload bytes exclude HTTP headers, and recorded retries remain inside elapsed time.
 
-The interactive lab uses the same fixed sweeps and source recovery@1, with a choice of three noise levels. It defaults to 10 queries per configuration, with a 1–10,000 control and cancellation. For a short run, it shuffles the 10,000 query indices once, takes the selected number without repetition, and shares that subset across configurations; full runs preserve the original query order. Result rows show sample counts. Short samples illustrate behavior and do not replace full measurements. A visible warning covers downloads and runtime: even short checks can transfer hundreds of MB; full checks can take hours and transfer hundreds of GB. The complete query suite and index manifests still load at initialization. The automatic comparison runner continues to use all 10,000 queries. The lab shares overlapping configurations and retains completed rows when canceled. Its centroid timing is a single preload per configuration, rather than the automatic runner's shared 1,000 samples. Local asset timings do not predict Internet performance.
+The interactive lab reports top-1 agreement for all three noise levels. It defaults to 10 queries per configuration and supports 1–10,000 queries and cancellation. Short runs share one randomly sampled subset across configurations. Full runs preserve query order. Each result row shows its sample count. The lab loads the query suite, exact IDs and index manifests before testing, then loads centroids once per configuration. It shares overlapping configurations and retains completed rows when canceled.
 
 ## Saved results and paper exports
 

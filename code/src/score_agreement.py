@@ -61,6 +61,11 @@ def load_references(paths):
     return references
 
 
+def browser_references(references):
+    fields = ("fixture_id", "noise_level", "passages", "queries", "exact_top1_ids")
+    return {fixture: {key: reference[key] for key in fields} for fixture, reference in references.items()}
+
+
 def write_scores(output, rows):
     output.parent.mkdir(parents=True, exist_ok=True)
     with TemporaryDirectory(prefix=".top1-agreement-", dir=output.parent) as directory:

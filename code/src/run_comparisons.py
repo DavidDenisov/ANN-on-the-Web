@@ -23,7 +23,7 @@ import numpy as np
 from paper_settings import CLUSTER_COUNTS, CORPUS_COUNT, DEFAULT_INPUT, NOISE_LABELS, NOISE_LEVELS, QUERY_COUNT, comparison_memberships, comparison_settings
 from cloudflare import StreamingPagesPublisher, ensure_pages_project
 from measurement_validation import centroid_downloads, validate_centroid_samples, finite_number, is_public_host, positive_integer, validate_result
-from score_agreement import load_references, score, write_scores
+from score_agreement import browser_references, load_references, score, write_scores
 
 
 CODE_ROOT = Path(__file__).resolve().parents[1]
@@ -151,8 +151,9 @@ def comparison_plan(config: dict | None = None) -> dict[tuple[str, int, int, str
 
 
 class ResultStore:
-    def __init__(self, output, config, fixtures, data):
+    def __init__(self, output, config, fixtures, data, references):
         self.output, self.config = Path(output), config
+        self.references = references
         self.data = Path(data)
         self.expected = comparison_plan(config)
         self.seen = set()
@@ -193,7 +194,8 @@ class ResultStore:
 
     def _csv(self):
         fields = ("noise", "noise_level", "checks", "clusters", "probes", "codec", "k", "queries", "repeats",
-                  "accuracy_only", "cluster_fetch_cache", "source_recovery", "query_mean_ms", "query_p95_ms", "bytes_per_query", "centroid_bytes", "centroid_setup_id",
+                  "accuracy_only", "cluster_fetch_cache", "top1_agreement", "source_recovery", "query_mean_ms",
+                  "query_p95_ms", "bytes_per_query", "centroid_bytes", "centroid_setup_id",
                   "centroid_download_mean_ms", "centroid_decode_mean_ms", "network_mode", "asset_base_url", "fixture_id")
         with (self.output / "summary.csv").open("x", newline="", encoding="utf-8") as output:
             writer = csv.DictWriter(output, fieldnames=fields)
@@ -214,6 +216,7 @@ class ResultStore:
                     'repeats': row['repeats'],
                     'accuracy_only': row['accuracy_only'],
                     'cluster_fetch_cache': row['cluster_fetch_cache'],
+                    'top1_agreement': row.get('top1_agreement', ''),
                     'source_recovery': statistics.mean((trial['recall'] for trial in trials)),
                     'query_mean_ms': statistics.mean(times) if times else '',
                     'query_p95_ms': times[math.ceil(len(times) * 0.95) - 1] if times else '',
@@ -318,6 +321,12 @@ class ResultStore:
                     or any(type(value) is not int or not 0 <= value < self.report["fixtures"][label]["count"] for value in ids)
                     or trial.get("targetId") != target or trial["recall"] != float(target in ids)):
                 raise ValueError("Trial does not measure recovery of its source passage")
+        reference = self.references.get(row["fixture_id"])
+        if reference is not None:
+            if row.get("top1_agreement") != score(reference, row)["top1_agreement"]:
+                raise ValueError("Browser top-1 agreement does not match the exact reference")
+        elif "top1_agreement" in row:
+            raise ValueError("Browser reported top-1 agreement without an exact reference")
         measurement = {"noise_label": label, "memberships": packet["memberships"], "result": row}
         with (self.output / "measurements.jsonl").open("a", encoding="utf-8") as journal:
             journal.write(json.dumps(measurement, separators=(",", ":")) + "\n")
@@ -494,16 +503,22 @@ def main() -> None:
             publisher = StreamingPagesPublisher(output / "pages", args.cloudflare_project)
         build_comparison_data(args.input, data, publish_index=publisher)
         suites = load_prepared_data(data)
-    references = load_references(args.exact)
-    if references:
+    references = {}
+    if not (args.prepare_only or args.centroid_only):
         selected = suites if args.only_8k_probes is None else suites[-1:]
         expected = {suite["id"]: suite for suite in selected}
         sources = np.fromfile(data / "truth.u32.bin", dtype="<u4").tolist()
+        bundled = json.loads((CODE_ROOT / "client_wiki/assets/exact-top1.json").read_text())
+        references = {fixture: {**reference, "source_ids": sources} for fixture, reference in bundled.items()
+                      if fixture in expected}
+        references.update(load_references(args.exact))
         for fixture, reference in references.items():
             suite = expected.get(fixture)
-            if (suite is None or reference["noise_level"] != suite["noise"]["level"]
+            ids = reference["exact_top1_ids"]
+            if (suite is None or reference["fixture_id"] != fixture or reference["noise_level"] != suite["noise"]["level"]
                     or reference["queries"] != suite["query_count"] or reference["passages"] != suite["count"]
-                    or reference["source_ids"] != sources):
+                    or reference["source_ids"] != sources or len(ids) != suite["query_count"]
+                    or any(type(id) is not int or not 0 <= id < suite["count"] for id in ids)):
                 parser.error("--exact reference does not match a selected query fixture")
     config = {
         "version": 1, "id": secrets.token_hex(16), "token": secrets.token_hex(24),
@@ -513,6 +528,8 @@ def main() -> None:
         "centroid_setup_repeats": 1000, "centroid_only": args.centroid_only,
         "seed": suites[0]["seed"], "results_url": "/api/results",
     }
+    if references:
+        config["exact_references"] = browser_references(references)
     if args.only_8k_probes is not None:
         config["only_8k_probes"] = sorted(set(args.only_8k_probes))
     output.mkdir(parents=True, exist_ok=True)
@@ -529,7 +546,7 @@ def main() -> None:
     for item, suite in zip(config["suites"], suites):
         item["url"] = urljoin(config["assets_base_url"], suite["suite_path"])
     wait_for_asset_hosts_tls(config["asset_base_urls"])
-    store = ResultStore(output, config, dict(zip(NOISE_LABELS, suites)), data)
+    store = ResultStore(output, config, dict(zip(NOISE_LABELS, suites)), data, references)
     (output / "run.json").write_text(json.dumps(store.report["config"], indent=2) + "\n", encoding="utf-8")
     with ThreadingHTTPServer(("127.0.0.1", 0), partial(ComparisonHandler, store=store)) as server:
         server.timeout, server.daemon_threads = .5, True

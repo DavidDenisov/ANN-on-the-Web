@@ -17,6 +17,7 @@ from paper_settings import DEMO_INDEX_PATHS
 CODE = Path(__file__).resolve().parents[1]
 CLIENT_FILES = ("index.html", "benchmark.html", "DATA-NOTICE.txt", "assets/styles.css", "assets/search.mjs",
                 "assets/embedding-worker.mjs", "assets/search-index.mjs", "assets/benchmark.mjs", "assets/retrieval.mjs", "assets/lab.mjs",
+                "assets/exact-top1.json",
                 "assets/fonts/inter-v20-latin-regular.woff2", "assets/fonts/inter-v20-latin-500.woff2",
                 "assets/fonts/inter-v20-latin-600.woff2", "assets/fonts/inter-v20-latin-700.woff2",
                 "assets/fonts/OFL.txt")

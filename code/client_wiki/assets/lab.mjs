@@ -1,5 +1,5 @@
-import { loadSuite, benchmark, labPlan } from './benchmark.mjs';
-import { loadIndex, CODEC_LABELS as codecNames } from './retrieval.mjs';
+import { loadSuite, benchmark, labPlan, exactTop1ForSuite } from './benchmark.mjs';
+import { fetchJson, loadIndex, CODEC_LABELS as codecNames } from './retrieval.mjs';
 
 const $ = id => document.getElementById(id);
 const results = { counts: [], probes: [], codecs: [] };
@@ -7,6 +7,7 @@ let suite;
 let indexes = [];
 let busy = false;
 let controller;
+let exactReferences;
 
 const percent = value => `${(100 * value).toFixed(1)}%`;
 const ms = value => `${value.toFixed(2)} ms`;
@@ -57,12 +58,12 @@ function render(check, emptyMessage = 'Ready to measure.') {
     return Object.keys(codecNames).indexOf(a.codec) - Object.keys(codecNames).indexOf(b.codec) || a.probes - b.probes;
   });
   const values = rows.map(row => {
-    const recovery = `${percent(row.recall)} (${row.queries.toLocaleString('en-US')} ${row.queries === 1 ? 'query' : 'queries'})`;
+    const agreement = `${percent(row.top1_agreement)} (${row.queries.toLocaleString('en-US')} ${row.queries === 1 ? 'query' : 'queries'})`;
     if (check === 'codecs') {
       return [codecNames[row.codec], row.probes, bytes(row.centroidBytes), ms(row.centroidDownloadMs.mean),
-        ms(row.centroidDecodeMs.mean), recovery];
+        ms(row.centroidDecodeMs.mean), agreement];
     }
-    const measured = [recovery, `${row.queryMs.mean.toFixed(2)} / ${row.queryMs.p95.toFixed(2)} ms`,
+    const measured = [agreement, `${row.queryMs.mean.toFixed(2)} / ${row.queryMs.p95.toFixed(2)} ms`,
       bytes(row.bytesPerQuery)];
     if (check === 'counts') {
       return [row.clusters, row.probes, Math.round(suite.count / row.clusters).toLocaleString(), ...measured];
@@ -83,13 +84,19 @@ async function loadFixture() {
     render(check, 'Loading test queries…');
   }
   try {
-    const next = await loadSuite(new URL($('suiteUrl').value, location.href).href);
+    const [next, references] = await Promise.all([
+      loadSuite(new URL($('suiteUrl').value, location.href).href),
+      exactReferences ?? fetchJson(new URL('./exact-top1.json', import.meta.url).href),
+    ]);
+    exactReferences = references;
+    next.exactTop1Ids = exactTop1ForSuite(next, references);
+    if (!next.exactTop1Ids) throw new Error('No exact Faiss reference for this query fixture.');
     const loaded = await Promise.all(next.indexes.map(item => loadIndex(item.url)));
     suite = next;
     indexes = loaded;
     const passageCount = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 }).format(suite.count);
     $('fixtureInfo').textContent = `${passageCount} passages · ${suite.query_count.toLocaleString('en-US')} test queries`;
-    $('measurementNote').textContent = `Queries are indexed passage embeddings with Gaussian noise (L2 magnitude ${suite.noise.level}). Source recovery@1 counts queries whose original passage is the first result. Timings include downloads and browser processing on this device.`;
+    $('measurementNote').textContent = `Queries are indexed passage embeddings with Gaussian noise (L2 magnitude ${suite.noise.level}). Agreement uses precomputed Faiss results. Timings include downloads and browser processing on this device.`;
     Object.keys(results).forEach(check => render(check));
     status('Ready. Run a check to collect live measurements.');
   } catch (error) {
