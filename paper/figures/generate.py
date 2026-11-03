@@ -196,11 +196,13 @@ for metric, scale, label, filename in [
             offset = -11 if clusters == 8192 else -9 if clusters == 16384 else 5
             if clusters == 8192 and row['probes'] == '5':
                 offset = 7
+            if metric == 'bytes_per_query' and clusters == 32768 and row['probes'] in ('8', '10'):
+                offset = 2
             axis.annotate(row['probes'], (x, 100 * p), xytext=(0 if clusters == 32768 else 3, offset), textcoords='offset points',
                           ha='center', fontsize=6.5, color=color)
     axis.set_xlabel(label)
     axis.set_ylabel('Top-1 agreement (%)')
-    axis.set_ylim(94.3, 100.25)
+    axis.set_ylim((94.9, 100) if metric == 'bytes_per_query' else (94.3, 100.25))
     axis.set_yticks([95, 96, 97, 98, 99, 100])
     axis.set_xlim(left=0)
     axis.grid(axis='y', color='0.88', linewidth=.5)
