@@ -130,7 +130,7 @@ We measure retrieval accuracy against exhaustive search. We time text retrieval 
 Configurations share \BenchmarkQueryCount{} uniformly sampled distinct source passages. For each sampled passage, we draw a Gaussian vector $v\in\mathbb{R}^{384}$, rescale it to noise magnitude $\|v\|_2=\alpha$, add it to the passage's unit embedding, and renormalise to obtain the query. Routing tests use $\alpha=0.4$. The lab also offers $0.05$ and $0.15$.
 
 \paragraph{Noise scale.}
-At $\alpha=0.4$, the mean query-source L2 displacement across $1{,}000$ uniformly sampled passages was $0.378$, or $55.5\%$ of the mean nearest-neighbour distance ($0.681$) from an exact full-corpus scan excluding self matches. With this displacement, probe count had a more noticeable effect on top-1 agreement.
+At $\alpha=0.4$, the mean query-source L2 displacement across $1{,}000$ uniformly sampled passages was $0.378$, or $55.5\%$ of the mean nearest-neighbour distance ($0.681$) from an exact full-corpus scan excluding self matches. Among the three noise scales tested, the effect of probe count on top-1 agreement was most pronounced at this scale.
 
 \paragraph{Metric.}
 \textbf{Top-1 agreement} is the fraction of queries whose first browser result has the same passage ID as the top result from an exhaustive Faiss L2 scan over the same renormalised FP16 passage vectors. For the $10{,}000$ high-noise queries, 32k/SQ6 and four probes agree on $\DefaultAgreement{}\%$, with a $95\%$ Wilson interval of $\DefaultAgreementLow{}\%$ to $\DefaultAgreementHigh{}\%$~\cite{wilson1927}.
