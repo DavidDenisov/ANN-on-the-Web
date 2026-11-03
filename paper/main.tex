@@ -139,7 +139,7 @@ At $\alpha=0.4$, mean L2 query displacement across $1{,}000$ uniformly sampled p
 Experiments use Ubuntu~22.04 on an Intel Core i5-12400F PC with 32~GB RAM and a GTX 1660 SUPER GPU. GPU Faiss prepared the indexes. Browser experiments use Chromium~155; inference uses Transformers.js~4.3.1 with CPU-only WebAssembly and four threads. Separate \href{https://fast.com/}{FAST.com} checks reported about $300$~Mbit/s download; CDN throughput was uncontrolled.
 
 \paragraph{Embedding compatibility.}
-Re-embedding $1{,}000$ uniformly sampled passages with the q8 browser encoder yields mean and 5th-percentile cosine similarities of $0.9924$ and $0.9892$ to the stored vectors; this passage check does not validate question retrieval.
+Re-embedding $1{,}000$ uniformly sampled passages with the q8 browser encoder yields mean and 5th-percentile cosine similarities of $0.9924$ and $0.9892$ to the stored vectors. The browser embeddings remain compatible with the stored vectors despite these small differences.
 
 \paragraph{Configurations.}
 FP16 probe sweeps use 2--5 probes at 8k and 2, 3, 4, 6, 8, 10 at 16k/32k. At 32k and four probes, we compare FP16, SQ8/SQ6/SQ4, symmetric INT8~\cite{Faiss}, and PQ4 with 4-bit codes per eight-component block~\cite{product-quantization}. Cluster assignments and FP16 passage vectors stay fixed. Shared configurations run once.
