@@ -69,10 +69,10 @@ More broadly, \href{https://pagefind.app/}{Pagefind} (keyword search) and \href{
 Both pages use $35{,}167{,}920$ passages from Maloyan's December 2022 English Wikipedia snapshot~\cite{wiki-minilm}, giving visitors a broad choice of topics. A full index download would be impractical. Our method makes browser search practical at this scale with free static CDN hosting.
 
 \paragraph{Wikipedia search.}
-Visitors enter any text or questions of their choice and get ranked passages linked to Wikipedia (Figure~\ref{fig:search-demo}). Defaults are 32k clusters, SQ6 centroids, four probes and ten results. Controls offer three cluster counts, six centroid formats and $1$--$100$ probes. The page reports stage timings and vector downloads.
+Visitors enter any text or questions of their choice and get ranked passages linked to Wikipedia (Figure~\ref{fig:search-demo}). Defaults are 32k clusters, SQ6 centroids, four probes and ten results. Controls offer three cluster counts, six centroid formats and $1$--$100$ probes. The page reports stage timings and vector downloads. At the poster, visitors try the photosynthesis question with one and four probes and compare passages and vector downloads.
 
 \paragraph{Clustering lab.}
-The lab (Figure~\ref{fig:lab-demo}) reports top-1 agreement with exhaustive Faiss search across noise presets, cluster counts, probes and centroid formats. Runs share a uniform sample of $1$--$10{,}000$ perturbed-passage queries (default $10$). At the poster, visitors compare passages and vector downloads for the photosynthesis question (Figure~\ref{fig:search-demo}) with one and four probes, then run a short lab check and discuss the trade-off in Figure~\ref{fig:agreement-bytes}.
+The lab (Figure~\ref{fig:lab-demo}) reports top-1 agreement with exhaustive Faiss search across noise presets, cluster counts, probes and centroid formats. Runs share a uniform sample of $1$--$10{,}000$ perturbed-passage queries (default $10$). Visitors then run a short lab check and discuss the trade-off in Figure~\ref{fig:agreement-bytes}.
 
 \begin{figure*}[t]
 \begin{minipage}[t]{\columnwidth}
@@ -94,7 +94,7 @@ The lab (Figure~\ref{fig:lab-demo}) reports top-1 agreement with exhaustive Fais
 \end{figure*}
 
 \paragraph{Public access.}
-The presenter preloads the model, runtime and centroids on a validated laptop. The poster provides a QR code and URL. Saved screenshots and plots support a narrated fallback for connection or browser failures. The author will keep the demo URL available for at least three years after the conference.
+The presenter preloads the required resources on a validated laptop. The poster provides a QR code and URL. Saved screenshots and plots support a narrated fallback for connection or browser failures. The author will keep the demo URL available for at least three years after the conference.
 
 
 \section{Method outline}
