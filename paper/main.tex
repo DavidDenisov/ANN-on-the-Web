@@ -58,7 +58,7 @@ Our method uses an inverted file (IVF) index built with Faiss~\cite{Faiss}. The 
 \subsection{Related work}
 This demo builds on an earlier public image-search website by the author, omitted here due to its content. The subsequent \href{https://pypi.org/project/annpack/0.1.6/}{\mbox{ANNPack} 0.1.x} also fetches selected vector clusters over the Web.
 
-SPANN~\cite{spann} stores IVF posting lists on local SSDs and evaluates a variant that distributes the search load across machines, while our demo shifts the entire search load to the client. Tiptoe~\cite[Section~4]{Tiptoe} uses IVF-style cluster selection and computes similarity scores under encryption on a dedicated server.
+SPANN~\cite{spann} reduces local SSD reads with IVF posting lists and evaluates a variant that distributes the search load across machines, while our demo shifts the entire search load to the client. Tiptoe~\cite[Section~4]{Tiptoe} uses IVF-style client-side cluster selection. A dedicated ranking service computes encrypted similarity scores without learning the selected cluster.
 
 DiskANN~\cite{DiskANN} computes ANN by traversing a graph (stored on SSD). MeMemo~\cite{MeMemo} and WebANNS~\cite{WebANNS} keep graph indexes in browser RAM and IndexedDB; WebANNS evaluates up to $480{,}000$ passages. Importing our remote corpus into such local indexes would require a large initial data transfer; we avoid that import by fetching only selected clusters.
 
@@ -66,13 +66,13 @@ More broadly, \href{https://pagefind.app/}{Pagefind} (keyword search) and \href{
 
 \section{Demonstration scenario}
 \label{sec:demo}
-Both public pages use Maloyan's dataset of $35{,}167{,}920$ passages from a December 2022 snapshot of English Wikipedia~\cite{wiki-minilm}. Wikipedia gives visitors a broad choice of topics. A full index download would be prohibitively large. Our method makes browser search practical at this scale with only free static CDN hosting.
+Both pages use $35{,}167{,}920$ passages from Maloyan's December 2022 English Wikipedia snapshot~\cite{wiki-minilm}, giving visitors a broad choice of topics. A full index download would be impractical. Our method makes browser search practical at this scale with free static CDN hosting.
 
 \paragraph{Wikipedia search.}
-Visitors can enter any text or questions of their choice and receive ranked passages linked to Wikipedia (Figure~\ref{fig:search-demo}). Defaults are 32k clusters, SQ6 centroids, four probes, and ten results. Controls offer three cluster counts, six centroid formats, and $1$--$100$ probes. The page reports embedding, centroid-loading, retrieval and text-loading times, and vector downloads.
+Visitors enter any text or questions of their choice and get ranked passages linked to Wikipedia (Figure~\ref{fig:search-demo}). Defaults are 32k clusters, SQ6 centroids, four probes and ten results. Controls offer three cluster counts, six centroid formats and $1$--$100$ probes. The page reports stage timings and vector downloads.
 
 \paragraph{Clustering lab.}
-The lab (Figure~\ref{fig:lab-demo}) offers noise presets and checks for cluster count, probes and centroid format. It reports top-1 agreement with exhaustive Faiss search. Visitors select $1$--$10{,}000$ perturbed-passage queries per configuration (default $10$). Short runs uniformly sample a shared subset. At the poster, visitors can run short checks and discuss the plots.
+The lab (Figure~\ref{fig:lab-demo}) reports top-1 agreement with exhaustive Faiss search across noise presets, cluster counts, probes and centroid formats. Runs share a uniform sample of $1$--$10{,}000$ perturbed-passage queries (default $10$). At the poster, visitors compare passages and vector downloads for the photosynthesis question (Figure~\ref{fig:search-demo}) with one and four probes, then run a short lab check and discuss the trade-off in Figure~\ref{fig:agreement-bytes}.
 
 \begin{figure*}[t]
 \begin{minipage}[t]{\columnwidth}
@@ -94,7 +94,7 @@ The lab (Figure~\ref{fig:lab-demo}) offers noise presets and checks for cluster 
 \end{figure*}
 
 \paragraph{Public access.}
-The presenter will preload all required resources on a validated laptop. A QR code and URL on the poster will give visitors access to the demo. For incompatible browsers, saved screenshots and retained plots support a narrated walkthrough. The author commits to keeping the demo URL available for at least three years after the conference.
+The presenter preloads the model, runtime and centroids on a validated laptop. The poster provides a QR code and URL. Saved screenshots and plots support a narrated fallback for connection or browser failures. The author will keep the demo URL available for at least three years after the conference.
 
 
 \section{Method outline}
@@ -193,7 +193,7 @@ SQ8/PQ passage codes with optional rescoring could reduce vector transfer, but t
 The timings cover controlled workloads and one live question. Latency across diverse real questions, on mobile devices and on throttled networks remains unmeasured.
 
 \paragraph{Privacy threat model.}
-The open-source client processes query text and embeddings locally. Model and runtime assets load from Hugging Face and jsDelivr. A host, CDN or network observer may link IP addresses and timing to the IDs of requested clusters and text batches. With known centroids, the requested clusters immediately define the region of query embeddings for which those centroids are the nearest. This follows from rearranging the distance comparisons into linear inequalities, which can be constructed in under a second for 32k clusters and four probes. Given the requested clusters and batches, it may be possible to reconstruct the displayed result set or part of it, though how much can be recovered remains an open question. The same unordered file IDs can be consistent with different result sets. Co-location would avoid result-specific text requests but require one text layout per count, while selected clusters remain visible. PIR, as in Tiptoe~\cite{Tiptoe}, requires a different serving protocol.
+The open-source client processes query text and embeddings locally. Model and runtime assets load from Hugging Face and jsDelivr. A host or CDN can link IP addresses and timing to requested cluster and text-batch IDs. Network observers may infer the IDs from encrypted traffic sizes and timing. Browser caches can hide requests. With the decoded centroids and the full set of selected clusters, rearranging the distance comparisons gives linear inequalities defining the possible query embeddings. On our test machine, construction took under a second for one query with 32k clusters and four probes, excluding centroid decoding and norm computation. Intersecting passage IDs from requested clusters and text batches may allow reconstruction of some or all of the displayed results. How much can be recovered remains an open question. The same unordered file IDs can be consistent with different result sets. Co-location would avoid result-specific text requests but require one text layout per count, while selected clusters remain visible. PIR, as in Tiptoe~\cite{Tiptoe}, requires a different serving protocol.
 
 \section{Conclusion}
 Most ANN work focuses on minimising the local search load. Even systems that reduce data transfer, such as SPANN~\cite{spann}, or bring search to the Web, such as WebANNS~\cite{WebANNS}, keep the index data on the same machines that search it. Our demo shifts the entire IVF search load to the client that submits the query, while a static CDN hosts the data separately. We show the trade-offs between agreement with exact search and latency/bandwidth. We hope this approach will be useful for RAG systems and for server deployments, where network speeds can be significantly higher than in our setup.
