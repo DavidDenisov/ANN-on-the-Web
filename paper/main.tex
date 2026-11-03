@@ -185,7 +185,7 @@ At 32k/SQ6 and four probes, vector retrieval averages $122.4$~ms and ten-passage
 \Needspace{10\baselineskip}
 \subsection{Client setup}
 \label{sec:client-setup}
-With the page already open, we start timing when the browser launches its background search worker. We stop when the embedding model and 32k/SQ6 centroids are ready. Across $100$ fresh browser contexts in one Chromium process, it takes $2.46/2.53$~s (mean/p95). Model ($23.7$~MB), WebAssembly runtime ($14.3$~MB) and compressed centroids ($9.0$~MB) total about $47$~MB before HTTP compression. Loads overlap and bypass browser caching.
+With the page already open, loading the embedding model and 32k/SQ6 centroids takes $2.46/2.53$~s (mean/p95) across $100$ fresh browser contexts in one Chromium process. Model ($23.7$~MB), WebAssembly runtime ($14.3$~MB) and compressed centroids ($9.0$~MB) total about $47$~MB before HTTP compression. Loads overlap and bypass browser caching.
 
 \subsection{Trade-offs and limitations}
 SQ8/PQ passage codes with optional rescoring could reduce vector transfer, but their ranking quality is untested. A server returning text alone is also an unmeasured baseline.
