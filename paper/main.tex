@@ -60,7 +60,7 @@ This demo builds on an earlier public image-search website by the author, omitte
 
 SPANN~\cite{spann} reduces local SSD reads with IVF posting lists and evaluates a variant that distributes the search load across machines, while our demo shifts the entire search load to the client. While Tiptoe~\cite[Section~4]{Tiptoe} also uses IVF-style client-side cluster selection, it later uses a dedicated ranking service that computes encrypted similarity scores, albeit without learning the selected clusters.
 
-DiskANN~\cite{DiskANN} computes ANN by traversing a graph (stored on SSD). MeMemo~\cite{MeMemo} and WebANNS~\cite{WebANNS} keep graph indexes in browser RAM and IndexedDB; WebANNS evaluates up to $480{,}000$ passages. Importing our remote corpus into such local indexes would require a large initial data transfer; we avoid that import by fetching only selected clusters.
+DiskANN~\cite{DiskANN} computes ANN by traversing a graph on SSD. MeMemo~\cite{MeMemo} keeps its HNSW graph and keys in RAM and its vectors in IndexedDB. WebANNS~\cite{WebANNS} also uses a browser-local graph index and evaluates up to $480{,}000$ passages. We fetch only selected clusters to avoid a large initial import.
 
 More broadly, \href{https://pagefind.app/}{Pagefind} (keyword search) and \href{https://github.com/phiresky/sql.js-httpvfs}{sql.js-httpvfs} (SQL) also process selectively downloaded static data in the browser.
 

@@ -303,7 +303,7 @@ for y in (211, 176, 141, 106, 71):
 
 for y, title, detail in [(231, "Model + runtime", "+ centroids"),
                          (109, "Selected clusters", "IDs + FP16 vectors"),
-                         (40, "Text batches", "Top matches only")]:
+                         (40, "Text batches", "Contain top matches")]:
     for offset in (5.4, 3.6, 1.8, 0):
         c.setFillColorRGB(1, 1, 1)
         c.setStrokeColorRGB(.35, .45, .55)
