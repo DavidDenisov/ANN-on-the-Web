@@ -2,7 +2,7 @@
 
 ## Run the paper comparisons over the Internet
 
-The integrated browser comparison runner uses Python and an active browser tab. The recorded paper measurements used regular Chromium 155. Standalone browser/model and GPU measurement runners have been removed.
+The integrated browser comparison runner uses Python and an active browser tab. The recorded paper measurements used regular Chromium 155.
 
 The Python runner serves the local controls and saves results. The browser fetches centroid and cluster files directly from public HTTPS hosts. It never proxies timed downloads through Python.
 
@@ -40,6 +40,43 @@ python3 code/src/run_comparisons.py \
 Shared latency settings run once. The fixed matrix contains 42 latency configurations and 18 accuracy checks: 600,000 searches in total. The corpus, query count, probe sweeps, noise levels, formats and source recovery@1 are fixed by the runner.
 
 Queries are normalized source-passage vectors plus Gaussian noise of L2 length 0.05, 0.15 or 0.4, then normalized again. All levels share source passages, random vectors and trained indexes. The original passage remains indexed. Source recovery@1 is the fraction of queries returning their source passage first; this tests robustness to perturbations rather than relevance to natural-language questions.
+
+## Agreement with exact search
+
+Use GPU-enabled Faiss and CUDA-enabled PyTorch in the same Python environment. From the repository root, run:
+
+```sh
+python3 code/src/exact_recovery.py \
+  --prepared-data /path/to/original/prepared \
+  --hosting-manifest /path/to/original/hosting.json \
+  --output code/data/benchmark/exact-large.json
+```
+
+This defaults to the 10,000 large-noise queries and the 8,192-cluster layout. Use `--noise small` or `--noise medium` for the other query fixtures. One layout covers the entire corpus. The command uses local files first and streams missing binary assets from the hosting manifest, checking their hashes. A fully local preparation can run without `--hosting-manifest`.
+
+All queries stay on the GPU. Faiss searches every cluster with a float32 flat L2 index over the renormalized passage vectors. The scan keeps each query's global winner and breaks equal distances between cluster winners by lower passage ID. Within a cluster, Faiss selects the winner. The JSON includes the source IDs, exact top-1 IDs and squared L2 distances in query order.
+
+If the downloaded Wikipedia shards and original query files are available locally, scan the shards directly. From the repository root:
+
+~~~sh
+python3 code/src/exact_recovery.py \
+  --prepared-data /path/to/original/prepared \
+  --wikipedia /path/to/wikipedia \
+  --output code/data/benchmark/exact-large.json
+~~~
+
+The shard scan checks the dataset revision and row offsets against the query suite, then uses the same FP16 conversion as the cluster exporter. An exhaustive scan can group passages into shard batches because it visits every vector. This command runs offline and needs no cluster files.
+
+Add `--exact /path/to/exact-large.json` to a browser comparison command to export `top1-agreement.csv` for matching fixtures. To score completed runs from the repository root, use:
+
+~~~sh
+python3 code/src/score_agreement.py \
+  --exact /path/to/exact-large.json \
+  --report /path/to/browser/results.json \
+  --output /path/to/top1-agreement.csv
+~~~
+
+Use `--result` for standalone per-configuration JSON files. The scorer checks fixture identity, query coverage and source IDs before comparing the browser's first passage ID with the exact first passage ID. The paper uses the high-noise fixture. Supply separate exact references for other noise levels when scoring them. The live lab reports source recovery using the original passage IDs.
 
 ## Prepare and upload new indexes
 

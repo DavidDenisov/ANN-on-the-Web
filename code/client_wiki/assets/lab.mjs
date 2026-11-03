@@ -1,4 +1,4 @@
-import { loadSuite, benchmark, paperPlan } from './benchmark.mjs';
+import { loadSuite, benchmark, labPlan } from './benchmark.mjs';
 import { loadIndex, CODEC_LABELS as codecNames } from './retrieval.mjs';
 
 const $ = id => document.getElementById(id);
@@ -116,7 +116,7 @@ async function runChecks(checks) {
       }
       queryIndices.length = queryCount;
     }
-    const plan = paperPlan().map(item => ({ ...item,
+    const plan = labPlan().map(item => ({ ...item,
       memberships: item.memberships.filter(check => checks.includes(check)),
     })).filter(item => item.memberships.length);
     for (const check of checks) {

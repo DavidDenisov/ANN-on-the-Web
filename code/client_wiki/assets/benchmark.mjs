@@ -33,7 +33,7 @@ export const PAPER_SETTINGS = Object.freeze({
 });
 
 /** @returns {PlanEntry[]} */
-export function paperPlan() {
+export function paperPlan(checkClusters = PAPER_SETTINGS.quantization_clusters) {
   /** @type {Map<string, PlanEntry>} */
   const plan = new Map();
   /** @param {number} clusters @param {number} probes @param {Codec} codec @param {string} membership */
@@ -51,9 +51,13 @@ export function paperPlan() {
     const probeCounts = clusters === 8192 ? PAPER_SETTINGS.cluster_probe_counts_8k : PAPER_SETTINGS.cluster_probe_counts;
     for (const probes of probeCounts) add(clusters, probes, 'f16', 'counts');
   }
-  for (const probes of PAPER_SETTINGS.probe_counts) add(16384, probes, 'f16', 'probes');
-  for (const codec of PAPER_SETTINGS.codecs) add(16384, 4, codec, 'codecs');
+  for (const probes of PAPER_SETTINGS.probe_counts) add(checkClusters, probes, 'f16', 'probes');
+  for (const codec of PAPER_SETTINGS.codecs) add(checkClusters, PAPER_SETTINGS.quantization_probes, codec, 'codecs');
   return [...plan.values()];
+}
+
+export function labPlan() {
+  return paperPlan(32768);
 }
 
 /** @returns {PlanEntry[]} */
@@ -202,9 +206,9 @@ export async function benchmark(index, suite, {
   requireValue(typeof accuracyOnly === 'boolean', 'Invalid accuracy-only setting.');
   requireValue(index.dimensions === suite.dimensions && index.count === suite.count, 'Suite and index do not match.');
   requireValue(suite.metric === 'source-recovery' && suite.truth_k === 1, 'Invalid benchmark metric.');
-  requireValue([...paperPlan(), ...remaining32kPlan()].some(item => item.clusters === index.clusters && item.probes === probes
+  requireValue([...paperPlan(), ...labPlan(), ...remaining32kPlan()].some(item => item.clusters === index.clusters && item.probes === probes
     && item.codec === codec && item.accuracy_only === accuracyOnly)
-    && suite.query_count === PAPER_SETTINGS.query_count, 'Use a reported paper configuration.');
+    && suite.query_count === PAPER_SETTINGS.query_count, 'Use a supported benchmark configuration.');
   if (queryIndices === undefined) queryIndices = Array.from({ length: suite.query_count }, (_, index) => index);
   requireValue(Array.isArray(queryIndices) && queryIndices.length > 0 && queryIndices.length <= suite.query_count
     && !queryIndices.includes(undefined)

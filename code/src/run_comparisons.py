@@ -23,6 +23,7 @@ import numpy as np
 from paper_settings import CLUSTER_COUNTS, CORPUS_COUNT, DEFAULT_INPUT, NOISE_LABELS, NOISE_LEVELS, QUERY_COUNT, comparison_memberships, comparison_settings
 from cloudflare import StreamingPagesPublisher, ensure_pages_project
 from measurement_validation import centroid_downloads, validate_centroid_samples, finite_number, is_public_host, positive_integer, validate_result
+from score_agreement import load_references, score, write_scores
 
 
 CODE_ROOT = Path(__file__).resolve().parents[1]
@@ -450,9 +451,13 @@ def main() -> None:
     parser.add_argument("--cloudflare-project", help="build and upload the paper indexes, then measure them")
     parser.add_argument("--no-browser", action="store_true", help="print the control URL without opening it")
     parser.add_argument("--centroid-only", action="store_true", help="only measure the eight centroid files, 1,000 trials each")
+    parser.add_argument("--exact", type=Path, nargs="+", default=[],
+                        help="Faiss references for exporting top1-agreement.csv")
     parser.add_argument("--8k-probes", dest="only_8k_probes", type=int, nargs="+", choices=(2, 3, 4, 5),
                         help="only measure these 8k FP16 probes at large noise (0.4), using the original preparation")
     args = parser.parse_args()
+    if args.exact and (args.serve or args.prepare_only or args.cloudflare_project or args.centroid_only):
+        parser.error("--exact requires a retrieval run over existing prepared data")
     if args.only_8k_probes is not None and (args.serve or args.prepare_only or args.cloudflare_project or args.centroid_only):
         parser.error("--8k-probes requires an existing preparation and hosting manifest; omit other modes")
     if args.serve:
@@ -489,6 +494,17 @@ def main() -> None:
             publisher = StreamingPagesPublisher(output / "pages", args.cloudflare_project)
         build_comparison_data(args.input, data, publish_index=publisher)
         suites = load_prepared_data(data)
+    references = load_references(args.exact)
+    if references:
+        selected = suites if args.only_8k_probes is None else suites[-1:]
+        expected = {suite["id"]: suite for suite in selected}
+        sources = np.fromfile(data / "truth.u32.bin", dtype="<u4").tolist()
+        for fixture, reference in references.items():
+            suite = expected.get(fixture)
+            if (suite is None or reference["noise_level"] != suite["noise"]["level"]
+                    or reference["queries"] != suite["query_count"] or reference["passages"] != suite["count"]
+                    or reference["source_ids"] != sources):
+                parser.error("--exact reference does not match a selected query fixture")
     config = {
         "version": 1, "id": secrets.token_hex(16), "token": secrets.token_hex(24),
         "suites": [{"label": label, "noise": noise, "url": suite["suite_path"]}
@@ -533,6 +549,10 @@ def main() -> None:
             return
     if not store.report["complete"]:
         raise RuntimeError(store.report.get("error", "The browser did not complete the comparison matrix"))
+    if references:
+        rows = [score(references[row["fixture_id"]], row) for item in store.report["measurements"]
+                if (row := item["result"])["fixture_id"] in references]
+        write_scores(output / "top1-agreement.csv", rows)
     if args.only_8k_probes is not None:
         print(f"Saved 8k-only results.json, summary.csv and centroid-summary.csv in {output}", flush=True)
         return

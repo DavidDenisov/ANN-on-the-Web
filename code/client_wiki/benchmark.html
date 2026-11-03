@@ -66,12 +66,12 @@
       </section>
       <section class="panel experiment" aria-labelledby="probeHeading">
         <div class="experiment-heading"><div><span class="step">02</span><h2 id="probeHeading">Clusters searched</h2></div><button class="btn btn-secondary run-check" data-check="probes" disabled>Run check</button></div>
-        <p>Compare 1, 2, 3, 4, 6, 8 and 10 probes at 16,384 clusters.</p>
+        <p>Compare 1, 2, 3, 4, 6, 8 and 10 probes at 32,768 clusters.</p>
         <div class="table-scroll"><table><caption class="sr-only">Probe budget measurements</caption><thead><tr><th>Clusters probed</th><th>Candidates</th><th>Source recovery</th><th>Search mean / p95</th><th>Download / query</th></tr></thead><tbody id="probesRows"><tr class="empty"><td colspan="5">Run this check to measure the tradeoff.</td></tr></tbody></table></div>
       </section>
       <section class="panel experiment" aria-labelledby="codecHeading">
         <div class="experiment-heading"><div><span class="step">03</span><h2 id="codecHeading">Centroid compression</h2></div><button class="btn btn-secondary run-check" data-check="codecs" disabled>Run check</button></div>
-        <p>Source recovery and centroid loading at 16,384 clusters and four probes. Cluster files may use browser caching; centroids bypass it.</p>
+        <p>Source recovery and centroid loading at 32,768 clusters and four probes. Cluster files may use browser caching; centroids bypass it.</p>
         <div class="table-scroll"><table><caption class="sr-only">Centroid compression results</caption><thead><tr><th>Format</th><th>Probes</th><th>File size</th><th>Download</th><th>Decode</th><th>Source recovery</th></tr></thead><tbody id="codecsRows"><tr class="empty"><td colspan="6">Run this check to measure the tradeoff.</td></tr></tbody></table></div>
         <p class="footnote">Query timings are omitted for this accuracy-only check.</p>
       </section>

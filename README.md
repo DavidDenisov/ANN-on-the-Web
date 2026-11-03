@@ -53,7 +53,7 @@ python3 code/src/run_comparisons.py --serve
 
 Open [local search](http://127.0.0.1:8080/client_wiki/) or [the lab](http://127.0.0.1:8080/client_wiki/benchmark.html). Use the public demo above when no local preparation is available.
 
-The [benchmark guide](code/docs/benchmarks.md) covers integrated browser comparisons, index preparation, publishing, and offline exports. [Client measurement notes](code/docs/client-measurements.md) preserve the historical embedding, startup, compatibility, text-loading, and complete-query protocols. Standalone live measurement runners have been removed.
+The paper measures top-1 agreement with exhaustive Faiss search over the full corpus. The [benchmark guide](code/docs/benchmarks.md#agreement-with-exact-search) explains how to build the exact reference and score saved browser runs. [Client measurement notes](code/docs/client-measurements.md) preserve the historical embedding, startup, compatibility, text-loading, and complete-query protocols. Standalone live measurement runners have been removed.
 
 This upload contains source code, documentation, required paper figures, and compact measurement summaries in `paper/results/`. Raw datasets, prepared indexes, model/browser caches, full trial records, build intermediates, and local review-tool output are not included. The current compiled paper is included at `paper/main.pdf`.
 

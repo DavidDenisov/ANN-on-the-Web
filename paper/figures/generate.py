@@ -1,4 +1,4 @@
-"""Build compact figures/tables from the retained paper measurements."""
+"""Build compact paper-demo/tables from the retained paper measurements."""
 
 import csv
 import gzip
@@ -38,6 +38,25 @@ assert all(math.isclose(a, b, abs_tol=1e-12) for a, b in
 
 
 rows = read("results/retrieval-summary.csv")
+scored_runs = read("results/top1-agreement.csv")
+def run_key(row):
+    return tuple(row[field] for field in ('clusters', 'probes', 'codec', 'accuracy_only'))
+
+
+agreement_by_run = {run_key(row): row for row in scored_runs}
+assert len(agreement_by_run) == len(scored_runs)
+assert len({row['fixture_id'] for row in scored_runs}) == 1
+
+
+def agreement(row):
+    score = agreement_by_run[run_key(row)]
+    total = int(row['queries'])
+    assert score['queries'] == row['queries'] and float(score['noise_level']) == float(row['noise_level']) == .4
+    assert score['fixture_id'] == row.get('fixture_id', score['fixture_id'])
+    assert int(score['source_matches']) / total == float(row['source_recovery'])
+    return int(score['exact_top1_matches']) / total
+
+
 distribution = json.loads((ROOT / 'results/cluster-distribution.json').read_text())
 with gzip.open(ROOT / 'results/cluster-distribution-inputs.json.gz', 'rt') as stream:
     distribution_inputs = json.load(stream)
@@ -87,13 +106,16 @@ with (ROOT / 'results/recovery-intervals.csv').open('w', newline='') as stream:
     writer = csv.DictWriter(stream, fieldnames=list(intervals[0]))
     writer.writeheader()
     writer.writerows(intervals)
-default, = [r for r in intervals if r['codec'] == 'sq6' and r['probes'] == 4]
+default, = [r for r in supplement_rows if r['codec'] == 'sq6' and r['probes'] == '4']
+default_total = int(default['queries'])
+default_low, default_high = wilson(round(agreement(default) * default_total), default_total)
 sq4 = setups[32768, 'sq4']
 sq4_mbps = int(sq4['centroid_bytes']) * 8 / float(sq4['download_mean_ms']) / 1000
 (ROOT / 'results/review-derived.tex').write_text(
     '% Derived from retained summaries; regenerate with paper/figures/generate.py.\n'
-    + rf'\newcommand{{\DefaultRecoveryLow}}{{{100 * default["wilson95_low"]:.2f}}}' + '\n'
-    + rf'\newcommand{{\DefaultRecoveryHigh}}{{{100 * default["wilson95_high"]:.2f}}}' + '\n'
+    + rf'\newcommand{{\DefaultAgreement}}{{{100 * agreement(default):.2f}}}' + '\n'
+    + rf'\newcommand{{\DefaultAgreementLow}}{{{100 * default_low:.2f}}}' + '\n'
+    + rf'\newcommand{{\DefaultAgreementHigh}}{{{100 * default_high:.2f}}}' + '\n'
     + rf'\newcommand{{\SQFourMbps}}{{{sq4_mbps:.0f}}}' + '\n')
 probes = [1, 2, 3, 4, 6, 8, 10]
 probe_rows = read("figures/probe-32k-summary.csv")
@@ -114,10 +136,10 @@ fig, axes = plt.subplots(2, 1, figsize=(3.4, 2.7), sharex=True, layout="constrai
 axes[0].fill_between(probes, [float(r['query_p25_ms']) for r in probe_rows],
                      [float(r['query_p75_ms']) for r in probe_rows], color='#0072B2', alpha=.2, linewidth=0)
 axes[0].plot(probes, [float(r['query_median_ms']) for r in probe_rows], color='#0072B2', marker='o', markersize=3)
-axes[1].plot(probes, [100 * float(r['source_recovery']) for r in probe_rows],
+probe_agreement = [agreement(r) for r in probe_rows]
+axes[1].plot(probes, [100 * p for p in probe_agreement],
              color='#0072B2', marker='o', markersize=3)
-recovery = [float(r['source_recovery']) for r in probe_rows]
-bounds = [wilson(round(p * 10000), 10000) for p in recovery]
+bounds = [wilson(round(p * 10000), 10000) for p in probe_agreement]
 axes[1].fill_between(probes, [100 * low for low, high in bounds],
                      [100 * high for low, high in bounds], color='#0072B2', alpha=.2, linewidth=0)
 for axis in axes:
@@ -125,7 +147,7 @@ for axis in axes:
     axis.grid(axis="y", color="0.88", linewidth=.5)
 axes[0].set_ylabel("Retrieval (ms)")
 axes[0].set_ylim(bottom=0)
-axes[1].set_ylabel("Recovery@1 (%)")
+axes[1].set_ylabel("Top-1 agreement (%)")
 axes[1].set_ylim(80, 100.5)
 axes[1].set_xlabel("Clusters probed")
 fig.savefig(OUT / "probe-large.pdf")
@@ -157,29 +179,29 @@ assert all(r['codec'] == 'f16' and r['noise'] == 'large' and float(r['noise_leve
            and float(r['bytes_per_query']) > 0
            for r in tradeoff_rows.values())
 for metric, scale, label, filename in [
-        ('query_mean_ms', 1, 'Mean retrieval time (ms/query)', 'recovery-time.pdf'),
-        ('bytes_per_query', 1e6, 'Mean vector payload (MB/query)', 'recovery-bytes.pdf')]:
+        ('query_mean_ms', 1, 'Mean retrieval time (ms/query)', 'agreement-time.pdf'),
+        ('bytes_per_query', 1e6, 'Mean vector payload (MB/query)', 'agreement-bytes.pdf')]:
     fig, axis = plt.subplots(figsize=(3.4, 2.35), layout='constrained')
     for clusters, color, marker in [(8192, '#D55E00', 's'), (16384, '#009E73', '^'), (32768, '#0072B2', 'o')]:
         shown_probes = [2, 3, 4, 5] if clusters == 8192 else [2, 3, 4, 6, 8, 10]
         selected = [tradeoff_rows[clusters, probes] for probes in shown_probes]
         costs = [float(r[metric]) / scale for r in selected]
-        recovery = [float(r['source_recovery']) for r in selected]
-        bounds = [wilson(round(p * 10000), 10000) for p in recovery]
+        agreement_values = [agreement(r) for r in selected]
+        bounds = [wilson(round(p * 10000), 10000) for p in agreement_values]
         axis.fill_between(costs, [100 * low for low, high in bounds],
                           [100 * high for low, high in bounds], color=color, alpha=.18, linewidth=0)
-        axis.plot(costs, [100 * p for p in recovery], color=color, marker=marker,
+        axis.plot(costs, [100 * p for p in agreement_values], color=color, marker=marker,
                   markersize=2, markeredgewidth=.35, linewidth=.8, label=f'{clusters:,} clusters')
-        for x, p, row in zip(costs, recovery, selected):
+        for x, p, row in zip(costs, agreement_values, selected):
             offset = -11 if clusters == 8192 else -9 if clusters == 16384 else 5
             if clusters == 8192 and row['probes'] == '5':
                 offset = 7
             axis.annotate(row['probes'], (x, 100 * p), xytext=(0 if clusters == 32768 else 3, offset), textcoords='offset points',
                           ha='center', fontsize=6.5, color=color)
     axis.set_xlabel(label)
-    axis.set_ylabel('Source recovery@1 (%)')
-    axis.set_ylim(93.5, 99.5)
-    axis.set_yticks([94, 95, 96, 97, 98, 99])
+    axis.set_ylabel('Top-1 agreement (%)')
+    axis.set_ylim(94.3, 100.25)
+    axis.set_yticks([95, 96, 97, 98, 99, 100])
     axis.set_xlim(left=0)
     axis.grid(axis='y', color='0.88', linewidth=.5)
     axis.legend(loc='lower right', fontsize=6.5, frameon=False)
@@ -189,7 +211,7 @@ lines = []
 for i, row in enumerate(r for r in count_rows if r['probes'] == '4'):
     if i % 2:
         lines.append(r'\rowcolor{black!4}')
-    lines.append(f"{int(row['clusters'])} & {int(row['probes'])} & {100 * float(row['source_recovery']):.1f} & "
+    lines.append(f"{int(row['clusters'])} & {int(row['probes'])} & {100 * agreement(row):.2f} & "
                  f"{float(row['query_mean_ms']):.0f} / {float(row['query_p95_ms']):.0f} & "
                  f"{float(row['bytes_per_query']) / 1e6:.2f}" + r' \\ \hline')
 (OUT / 'large-count-rows.tex').write_text('\n'.join(lines) + '\n')
@@ -201,7 +223,7 @@ for i, (codec, label) in enumerate([('f16', 'FP16'), ('sq8', 'SQ8'), ('sq6', 'SQ
     setup = setups[32768, codec]
     if i % 2:
         lines.append(r'\rowcolor{black!4}')
-    lines.append(f"{label} & {100 * float(matches[0]['source_recovery']):.1f} & "
+    lines.append(f"{label} & {100 * agreement(matches[0]):.2f} & "
                  f"{int(setup['centroid_bytes']) / 1e6:.2f} & "
                  f"{float(setup['download_mean_ms']):.0f} / {float(setup['download_p95_ms']):.0f} & "
                  f"{float(setup['decode_mean_ms']):.0f} / {float(setup['decode_p95_ms']):.0f}" + r' \\ \hline')
@@ -305,4 +327,4 @@ c.setFont("DejaVuSans", 6.8)
 c.drawString(7, 7, "Reuse model, runtime and centroids across queries.")
 c.showPage()
 c.save()
-print("Generated compact tables, probe, recovery--time and recovery--bytes plots, and architecture PDF.")
+print("Generated tables, agreement plots, and architecture PDF.")
