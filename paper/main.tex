@@ -56,11 +56,11 @@ Conventional ANN systems keep index data on the machines that search it, in memo
 Our method uses an inverted file (IVF) index built with Faiss~\cite{Faiss}. The client fetches selected clusters and ranks their vectors. The demo uses free static CDN hosting, and all query-time computation runs on the client's machine.
 
 \subsection{Related work}
-This demo builds on an earlier public image-search website by the author, omitted here due to its content. The subsequent \href{https://pypi.org/project/annpack/0.1.6/}{\mbox{ANNPack} 0.1.x} also fetches selected vector clusters over the Web.
+This demo builds on the author's September 2025 browser-based image-search implementation, which fetched selected vector clusters as separate compressed files \href{https://github.com/EchiCode/Reverse-Hentai-Search/blob/d2f10f19b0f16484b3955e40d5762455f3d68ff1/client/app.js\#L835-L887}{[code]}. The subsequent \href{https://pypi.org/project/annpack/0.1.6/}{\mbox{ANNPack} 0.1.x} also supports browser-side IVF search over static indexes.
 
 SPANN~\cite{spann} reduces local SSD reads with IVF posting lists and evaluates a variant that distributes the search load across machines, while our demo shifts the entire search load to the client. While Tiptoe~\cite[Section~4]{Tiptoe} also uses IVF-style client-side cluster selection, it later uses a dedicated ranking service that computes encrypted similarity scores, albeit without learning the selected clusters.
 
-DiskANN~\cite{DiskANN} computes ANN by traversing a graph on SSD. MeMemo~\cite{MeMemo} keeps its HNSW graph and keys in RAM and its vectors in IndexedDB. WebANNS~\cite{WebANNS} uses a browser-local graph index tested on $480{,}000$ Wikipedia passages. We fetch only selected clusters to avoid a large initial import.
+DiskANN~\cite{DiskANN} searches a graph on SSD. MeMemo~\cite{MeMemo} keeps its HNSW graph and keys in RAM and vectors in IndexedDB. \mbox{WebANNS}~\cite{WebANNS} tested a browser-local graph on $480{,}000$ Wikipedia passages. Selective cluster fetching avoids a large import.
 
 More broadly, \href{https://pagefind.app/}{Pagefind} (keyword search) and \href{https://github.com/phiresky/sql.js-httpvfs}{sql.js-httpvfs} (SQL) also process selectively downloaded static data in the browser.
 
