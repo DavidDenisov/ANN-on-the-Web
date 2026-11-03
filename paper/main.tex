@@ -185,7 +185,7 @@ At 32k/SQ6 and four probes, vector retrieval averages $122.4$~ms and ten-passage
 \Needspace{10\baselineskip}
 \subsection{Client setup}
 \label{sec:client-setup}
-With the page open, startup takes $2.46/2.53$~s (mean/p95) across $100$ fresh Chromium contexts. Startup assets total about $47$~MB before HTTP compression. Separate tests measured the main downloads (size, mean time) for model weights ($23.0$~MB, $1.44$~s), the WebAssembly binary ($14.3$~MB, $324$~ms) and 32k/SQ6 centroids ($9.0$~MB, $224$~ms). Library import, model initialization and centroid decoding averaged $371$, $642$ and $100$~ms. Some loads and components run in parallel, so startup takes less than the sum of these timings.
+With the page open, startup takes $2.46/2.53$~s (mean/p95) across $100$ fresh Chromium contexts. Startup assets total about $47$~MB before HTTP compression. Separate tests measured the main downloads (size, mean time) for model weights ($23.0$~MB, $1.44$~s), WebAssembly ($14.3$~MB, $324$~ms) and 32k/SQ6 centroids ($9.0$~MB, $224$~ms). Library import, model initialization and centroid decoding averaged $371$, $642$ and $100$~ms. Some loads and components run in parallel, so startup takes less than the sum of these timings.
 
 \subsection{Trade-offs and limitations}
 SQ8/PQ passage codes with optional rescoring could reduce vector transfer, but their ranking quality is untested. A server returning text alone is also an unmeasured baseline.
