@@ -58,7 +58,7 @@ Our method uses an inverted file (IVF) index built with Faiss~\cite{Faiss}. The 
 \subsection{Related work}
 This demo builds on an earlier public image-search website by the author, omitted here due to its content. The subsequent \href{https://pypi.org/project/annpack/0.1.6/}{\mbox{ANNPack} 0.1.x} also fetches selected vector clusters over the Web.
 
-SPANN~\cite{spann} reduces local SSD reads with IVF posting lists and evaluates a variant that distributes the search load across machines, while our demo shifts the entire search load to the client. Tiptoe~\cite[Section~4]{Tiptoe} uses IVF-style client-side cluster selection. A dedicated ranking service computes encrypted similarity scores without learning the selected cluster.
+SPANN~\cite{spann} reduces local SSD reads with IVF posting lists and evaluates a variant that distributes the search load across machines, while our demo shifts the entire search load to the client. While Tiptoe~\cite[Section~4]{Tiptoe} also uses IVF-style client-side cluster selection, it later uses a dedicated ranking service that computes encrypted similarity scores without learning the selected cluster.
 
 DiskANN~\cite{DiskANN} computes ANN by traversing a graph (stored on SSD). MeMemo~\cite{MeMemo} and WebANNS~\cite{WebANNS} keep graph indexes in browser RAM and IndexedDB; WebANNS evaluates up to $480{,}000$ passages. Importing our remote corpus into such local indexes would require a large initial data transfer; we avoid that import by fetching only selected clusters.
 
