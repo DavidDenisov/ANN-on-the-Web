@@ -36,11 +36,11 @@
       <fieldset class="control-group"><legend>Test queries</legend>
       <label for="suiteUrl">Query noise</label>
       <select id="suiteUrl" aria-describedby="noiseHint">
-        <option value="https://wiki-ann-benchmarks-20261017.pages.dev/noise-small/suite.json">Low (easier)</option>
-        <option value="https://wiki-ann-benchmarks-20261017.pages.dev/noise-medium/suite.json">Medium</option>
-        <option value="https://wiki-ann-benchmarks-20261017.pages.dev/noise-large/suite.json">High (harder)</option>
+        <option value="https://wiki-ann-benchmarks-20261017.pages.dev/noise-small/suite.json">Small (0.05)</option>
+        <option value="https://wiki-ann-benchmarks-20261017.pages.dev/noise-medium/suite.json">Medium (0.15)</option>
+        <option value="https://wiki-ann-benchmarks-20261017.pages.dev/noise-large/suite.json">Large (0.4)</option>
       </select>
-      <p class="query-help" id="noiseHint">More noise = harder.</p>
+      <p class="query-help" id="noiseHint">L2 noise magnitude.</p>
       <p class="fixture-info" id="fixtureInfo">Loading benchmark…</p>
       <label for="queryCount">Queries per configuration</label>
       <input id="queryCount" type="number" min="1" max="10000" step="1" value="10" required aria-describedby="queryCountHint labWarning">

@@ -87,7 +87,7 @@ The lab (Figure~\ref{fig:lab-demo}) offers noise presets and checks for cluster 
 \vspace{0pt}
 \centering
 \includegraphics[trim=0 50bp 0 152bp,clip,width=\columnwidth]{screenshots/lab-desktop.jpg}
-\Description{Lab after a high-noise cluster-count check with 100 queries per configuration. The left sidebar shows noise and query-count controls, a download warning and expandable measurement details. Rows on the right show top-1 agreement, search time and download size.}
+\Description{Lab after a cluster-count check with noise magnitude 0.4 and 100 queries per configuration. The left sidebar shows noise and query-count controls, a download warning and expandable measurement details. Rows on the right show top-1 agreement, search time and download size.}
 \caption{Lab cluster-count check with $100$ queries per configuration. Text enlarged for clarity.}
 \label{fig:lab-demo}
 \end{minipage}
@@ -127,7 +127,7 @@ On the \href{https://developers.cloudflare.com/pages/functions/pricing/#static-a
 We measure retrieval accuracy against exhaustive search. We time text retrieval separately in groups of ten passages.
 
 \paragraph{Query setup.}
-Configurations share \BenchmarkQueryCount{} uniformly sampled distinct source passages. For each sampled passage, we draw a Gaussian vector $v\in\mathbb{R}^{384}$, rescale it to noise magnitude $\|v\|_2=\alpha$, add it to the passage's unit embedding, and renormalise to obtain the query. Routing tests use High ($\alpha=0.4$); the lab also offers Low ($0.05$) and Medium ($0.15$).
+Configurations share \BenchmarkQueryCount{} uniformly sampled distinct source passages. For each sampled passage, we draw a Gaussian vector $v\in\mathbb{R}^{384}$, rescale it to noise magnitude $\|v\|_2=\alpha$, add it to the passage's unit embedding, and renormalise to obtain the query. Routing tests use $\alpha=0.4$. The lab also offers $0.05$ and $0.15$.
 
 \paragraph{Noise scale.}
 Across $1{,}000$ uniformly sampled passages, mean query-source L2 displacement is $0.378$, or $55.5\%$ of the mean nearest-neighbour distance ($0.681$) from an exact full-corpus scan excluding self matches.
