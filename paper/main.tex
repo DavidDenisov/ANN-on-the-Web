@@ -56,7 +56,7 @@ Conventional ANN systems keep index data on the machines that search it, in memo
 Our method uses an inverted file (IVF) index built with Faiss~\cite{Faiss}. The client fetches selected clusters and ranks their vectors. The demo uses free static CDN hosting, and all query-time computation runs on the client's machine.
 
 \subsection{Related work}
-This demo builds on the author's public image-search site, omitted due to its content. The subsequent \href{https://pypi.org/project/annpack/0.1.6/}{\mbox{ANNPack} 0.1.x} also fetches clusters over the Web. We add Wikipedia search and a lab.
+This demo builds on an earlier public image-search website by the author, omitted here due to its content. The subsequent \href{https://pypi.org/project/annpack/0.1.6/}{\mbox{ANNPack} 0.1.x} also fetches selected vector clusters over the Web.
 
 SPANN~\cite{spann} reduces local SSD reads with IVF posting lists and evaluates a variant that distributes the search load across machines, while our demo shifts the entire search load to the client. While Tiptoe~\cite[Section~4]{Tiptoe} also uses IVF-style client-side cluster selection, it later uses a dedicated ranking service that computes encrypted similarity scores, albeit without learning the selected clusters.
 
