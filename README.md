@@ -14,6 +14,26 @@ The lab defaults to 10 queries per configuration and accepts 1–10,000. Short r
 
 The notices and short-run controls are deployed to the public demo. Update the [Cloudflare frontend](code/docs/publish-demo.md#frontend-update) to publish further changes; source publication alone does not deploy them.
 
+## Source availability and permitted use
+
+The original application code and accompanying code documentation are
+source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE).
+The licence permits noncommercial use, modification, and redistribution,
+including research and reproduction of the paper's results. It also expressly
+permits use by the organizations listed in its Noncommercial Organizations
+section, regardless of their funding.
+
+Commercial use outside those permissions, including commercial resale or paid
+hosting, requires a separate licence from the copyright holder. Contact the
+[repository owner](https://github.com/DavidDenisov) to discuss permission.
+The full licence terms govern permitted uses.
+
+The licence covers only the original software and its code documentation.
+The paper, figures, datasets, embeddings, model weights, fonts, ACM template,
+and third-party components retain their applicable separate terms. It does not
+change permissions already granted under other licences. See [LICENSE](LICENSE)
+for the full terms.
+
 ## Repository layout
 
 - `paper/`: the four-page demo paper, bibliography, and bundled ACM class and sources.
