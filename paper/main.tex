@@ -78,9 +78,9 @@ The lab (Figure~\ref{fig:lab-demo}) reports top-1 agreement with exhaustive Fais
 \begin{minipage}[t]{\columnwidth}
 \vspace{0pt}
 \centering
-\includegraphics[trim=0 110bp 16bp 168bp,clip,width=\columnwidth]{screenshots/search-desktop.jpg}
-\Description{Current search interface showing privacy and download notices with the question form on the left and ranked Wikipedia passages with timings on the right.}
-\caption{Search with privacy/download notices and passages. Capture timings are illustrative; Section~\ref{sec:client-costs} estimates costs from component means. Text enlarged for clarity.}
+\includegraphics[trim=0 210bp 16bp 168bp,clip,width=\columnwidth]{screenshots/search-desktop.jpg}
+\Description{Search interface showing the question and expanded controls, including four clusters to search, on the left and ranked Wikipedia passages with timings on the right.}
+\caption{Search with probe controls and ranked passages. Capture timings are illustrative; Section~\ref{sec:client-costs} estimates costs from component means. Text enlarged for clarity.}
 \label{fig:search-demo}
 \end{minipage}\hfill
 \begin{minipage}[t]{\columnwidth}
@@ -142,10 +142,10 @@ Experiments use Ubuntu~22.04 on an Intel Core i5-12400F PC with 32~GB RAM and a 
 Re-embedding $1{,}000$ uniformly sampled passages with the q8 browser encoder yields mean and 5th-percentile cosine similarities of $0.9924$ and $0.9892$ to the stored vectors. These values show that the browser embeddings remain compatible despite small differences.
 
 \paragraph{Configurations.}
-FP16 probe sweeps use 2--5 probes at 8k and 2, 3, 4, 6, 8, 10 at 16k/32k. At 32k and four probes, we compare FP16 centroids with versions compressed to SQ8/SQ6/SQ4, symmetric INT8~\cite{Faiss}, and PQ4 with 4-bit codes per eight-component block~\cite{product-quantization}.
+FP16 sweeps use 2--5 probes at 8k and 2, 3, 4, 6, 8, 10 at 16k/32k. At 32k/four probes we test FP16, 4/6/8-bit min--max scalar quantisation (SQ4/6/8), zero-centred INT8~\cite{Faiss} and PQ4 (4 bits per eight-component block)~\cite{product-quantization}.
 
 \paragraph{Hosting and timing.}
-Vector and text files are prefetched to prime CDN caches. CDN residency and connections remain uncontrolled. Timed routing searches return one passage, fetch up to ten clusters in parallel and bypass browser HTTP caches. Untimed accuracy checks allow cached clusters. Table~\ref{tab:latency-table} reports agreement, timing and payload on the same timed queries.
+We prefetch vector and text files to prime CDN caches, with residency and connections uncontrolled. Timed searches return one passage, fetch up to ten clusters in parallel and bypass browser caches. Untimed checks allow cached clusters. Table~\ref{tab:latency-table} pairs time and payload with agreement on timed queries.
 
 
 Retrieval time includes routing, vector download, decompression, decoding and ranking; Sections~\ref{sec:text-retrieval}--\ref{sec:client-setup} report text retrieval, estimated query latency and startup. Centroids load once per configuration. Download and decode benchmarks use \BenchmarkCentroidSamples{} trials per file. Decode time includes gzip decompression. Tables give mean and $95$th-percentile (p95) times, and gzipped vector payload in decimal MB ($10^6$ bytes). Configuration order was randomised; the original seed and supplement order are recorded.
@@ -162,7 +162,7 @@ Figure~\ref{fig:agreement-bytes} reports gzipped vector payload, excluding start
 \centering
 \includegraphics[width=\columnwidth]{agreement-bytes.pdf}
 \Description{Top-1 agreement with exact Faiss search in percent against mean gzipped vector payload in decimal megabytes per query for 8,192, 16,384 and 32,768 clusters with FP16 centroids and noise magnitude 0.4. Sixteen configurations are shown, with probes 2, 3, 4 and 5 at 8k and six settings each at 16k and 32k. Small markers and probe labels distinguish the curves. Shading shows pointwise 95 percent Wilson intervals, clipped below 94.9 percent agreement. Payload excludes startup assets, result text and HTTP headers.}
-\caption{Top-1 agreement versus vector payload (FP16, $10{,}000$ queries/setting). Shading shows pointwise $95\%$ Wilson intervals. Labels mark probes.}
+\caption{Top-1 agreement with FP16 centroids versus vector payload ($10{,}000$ queries/setting). Shading shows pointwise $95\%$ Wilson intervals. Labels mark probes.}
 \label{fig:agreement-bytes}
 \end{figure}
 
@@ -190,7 +190,7 @@ With the page open, startup takes $2.46/2.53$~s (mean/p95) across $100$ fresh Ch
 \subsection{Trade-offs and limitations}
 SQ8/PQ passage codes with optional rescoring could reduce vector transfer, but their ranking quality is untested.
 
-The timings cover controlled workloads and one live question. Latency across diverse real questions, on mobile devices and on throttled networks remains unmeasured.
+The timings cover controlled workloads and one live question. Real-question relevance and latency across diverse queries, mobile devices and throttled networks remain unmeasured.
 
 \paragraph{Privacy threat model.}
 The open-source client processes query text and embeddings locally. Model and runtime assets load from Hugging Face and jsDelivr. A host or CDN can link IP addresses and timing to requested cluster and text-batch IDs. Network observers may infer the IDs from encrypted traffic sizes and timing. Browser caches can hide requests. With the decoded centroids and the full set of selected clusters, rearranging the distance comparisons gives linear inequalities defining the possible query embeddings. On our test machine, construction took under a second for one query with 32k clusters and four probes, excluding centroid decoding and norm computation. Intersecting passage IDs from requested clusters and text batches may allow reconstruction of some or all of the displayed results. How much can be recovered remains an open question. The same unordered file IDs can be consistent with different result sets. Co-location would avoid result-specific text requests but require one text layout per count, while selected clusters remain visible. PIR, as in Tiptoe~\cite{Tiptoe}, requires a different serving protocol.
