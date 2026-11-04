@@ -12,8 +12,6 @@
 \usepackage{colortbl}
 \usepackage{hyperref}
 \usepackage{needspace}
-% Keep anchored tables close to their discussion without stretched gaps.
-\setlength{\intextsep}{12pt}
 \input{results/settings}
 \input{results/review-derived}
 \graphicspath{{results/}{figures/}}
@@ -33,7 +31,7 @@ We demonstrate browser-based approximate nearest neighbour (ANN) search over $35
 \end{abstract}
 
 \ccsdesc[500]{Information systems~Similarity search}
-\keywords{approximate nearest neighbors, semantic search, client-side retrieval}
+\keywords{approximate nearest neighbors, client-side retrieval}
 
 \begin{teaserfigure}
 \begin{minipage}{\textwidth}
@@ -49,14 +47,14 @@ We demonstrate browser-based approximate nearest neighbour (ANN) search over $35
 
 
 \section{Introduction}
-Given a dataset of vectors and a query vector, $k$-nearest neighbour (kNN) retrieval finds the $k$ dataset vectors closest to the query under a chosen distance metric (Euclidean distance in our demo). Approximate nearest neighbour (ANN) search is used to speed up this task on large collections, at the cost of potentially missing some of the true nearest neighbours. In retrieval-augmented generation (RAG), ANN search is used to retrieve passages that a language model uses as context to generate an answer~\cite{lewis2020rag}.
+Approximate nearest neighbour (ANN) search seeks vectors close to a query vector, using Euclidean distance in our demo. It aims to be faster than exact search but may miss some true nearest neighbours. In retrieval-augmented generation (RAG), ANN can search passage embeddings to provide context for a language model~\cite{lewis2020rag}.
 
 Conventional ANN systems keep index data on the machines that search it, in memory or on disk~\cite{DiskANN,spann}. On the Web, this typically means running search on a server or downloading the full index to the browser, which would yield prohibitively large data transfer for our corpus. The FP16 vectors for our $35.2$ million Wikipedia passages alone occupy about $27$~GB before compression.
 
-Our method uses an inverted file (IVF) index built with Faiss~\cite{Faiss}. The client fetches selected clusters and ranks their vectors. The demo uses free static CDN hosting, and all query-time computation runs on the client's machine.
+We document and evaluate our client-side ANN implementation through a Wikipedia demo and lab. Faiss~\cite{Faiss} builds the IVF index offline; a static CDN hosts the files, while the browser fetches selected clusters and performs all query-time computation.
 
 \subsection{Related work}
-This demo builds on the author's September 2025 browser-based image-search implementation, which fetched selected vector clusters as separate compressed files \href{https://github.com/EchiCode/Reverse-Hentai-Search/blob/d2f10f19b0f16484b3955e40d5762455f3d68ff1/client/app.js\#L835-L887}{[code]}. The subsequent \href{https://pypi.org/project/annpack/0.1.6/}{\mbox{ANNPack} 0.1.x} also supports browser-side IVF search over static indexes.
+The author's September 2025 adult-themed browser-based \href{https://github.com/EchiCode/Reverse-Hentai-Search/blob/d2f10f19b0f16484b3955e40d5762455f3d68ff1/client/app.js\#L835-L887}{system} used this cluster-fetching design. \href{https://pypi.org/project/annpack/0.1.6/}{\mbox{ANNPack} 0.1.x}, first released on PyPI in January 2026 after that implementation, also supports browser-side IVF search over static indexes.
 
 SPANN~\cite{spann} reduces local SSD reads with IVF posting lists and evaluates a variant that distributes the search load across machines, while our demo shifts the entire search load to the client. While Tiptoe~\cite[Section~4]{Tiptoe} also uses IVF-style client-side cluster selection, it later uses a dedicated ranking service that computes encrypted similarity scores, albeit without learning the selected clusters.
 
@@ -72,13 +70,13 @@ Both pages use $35{,}167{,}920$ passages from Maloyan's December 2022 English Wi
 Visitors enter any text or questions of their choice and get ranked passages linked to Wikipedia (Figure~\ref{fig:search-demo}). Defaults are 32k clusters, SQ6 centroids, four probes and ten results. Controls offer three cluster counts, six centroid formats and $1$--$100$ probes. The page reports stage timings. At the poster, visitors can try the photosynthesis question at one and four probes to compare results, passages checked and vector bytes.
 
 \paragraph{Clustering lab.}
-The lab (Figure~\ref{fig:lab-demo}) reports top-1 agreement with exhaustive Faiss search across noise presets, cluster counts, probes and centroid formats. Runs share a uniform sample of $1$--$10{,}000$ perturbed-passage queries (default $10$). Visitors can run a short lab check, which takes longer than a single search, and use Figure~\ref{fig:agreement-bytes} to see how probe count affects agreement and download size.
+The lab (Figure~\ref{fig:lab-demo}) compares browser top-1 IDs with exhaustive Faiss reference IDs computed offline. Visitors can vary noise, cluster count, probes and centroid format. Runs share a uniform sample of $1$--$10{,}000$ perturbed-passage queries (default $10$). Lab checks take longer than a single search; Figure~\ref{fig:agreement-bytes} shows how probes affect agreement and download size.
 
 \begin{figure*}[t]
 \begin{minipage}[t]{\columnwidth}
 \vspace{0pt}
 \centering
-\includegraphics[trim=0 210bp 16bp 168bp,clip,width=\columnwidth]{screenshots/search-desktop.jpg}
+\includegraphics[width=\columnwidth]{screenshots/search-desktop-4000w.png}
 \Description{Search interface showing the question and expanded controls, including four clusters to search, on the left and ranked Wikipedia passages with timings on the right.}
 \caption{Search with probe controls and ranked passages. Capture timings are illustrative; Section~\ref{sec:client-costs} estimates costs from component means. Text enlarged for clarity.}
 \label{fig:search-demo}
@@ -86,9 +84,9 @@ The lab (Figure~\ref{fig:lab-demo}) reports top-1 agreement with exhaustive Fais
 \begin{minipage}[t]{\columnwidth}
 \vspace{0pt}
 \centering
-\includegraphics[trim=0 50bp 0 152bp,clip,width=\columnwidth]{screenshots/lab-desktop.jpg}
-\Description{Lab after a cluster-count check with noise magnitude 0.4 and 100 queries per configuration. The left sidebar shows noise and query-count controls, a download warning and expandable measurement details. Rows on the right show top-1 agreement, search time and download size.}
-\caption{Lab cluster-count check with $100$ queries per configuration. Text enlarged for clarity.}
+\includegraphics[width=\columnwidth]{screenshots/lab-desktop-4000w.png}
+\Description{Lab showing the recorded four-probe rows for 8,192, 16,384 and 32,768 clusters, with noise magnitude 0.4 and 100 queries per configuration. Enlarged noise and query-count controls appear beside top-1 agreement, search time and download size.}
+\caption{Lab cluster-count check with FP16 centroids: four probes and $100$ queries per setting. Text enlarged for clarity.}
 \label{fig:lab-demo}
 \end{minipage}
 \end{figure*}
@@ -134,6 +132,7 @@ At $\alpha=0.4$, mean L2 query displacement across $1{,}000$ uniformly sampled p
 
 \paragraph{Metric.}
 \textbf{Top-1 agreement} is the fraction of queries whose first browser result has the same passage ID as the top result from an exhaustive Faiss L2 scan over the same renormalised FP16 passage vectors, including each query's source passage. For the $10{,}000$ large-noise queries, 32k/SQ6 and four probes agree on $\DefaultAgreement{}\%$, with a $95\%$ Wilson interval of $\DefaultAgreementLow{}\%$ to $\DefaultAgreementHigh{}\%$~\cite{wilson1927}.
+Exact search returned the source passage for $98.92\%$ of these queries.
 
 \paragraph{Test environment.}
 Experiments use Ubuntu~22.04 on an Intel Core i5-12400F PC with 32~GB RAM and a GTX 1660 SUPER GPU. GPU Faiss prepared the indexes. Browser experiments use Chromium~155; inference uses Transformers.js~4.3.1 with CPU-only WebAssembly and four threads. Separate \href{https://fast.com/}{FAST.com} checks reported about $300$~Mbit/s download; CDN throughput was uncontrolled.
@@ -157,12 +156,12 @@ With FP16 centroids, four probes agree with exact search on at least $98.96\%$ o
 
 \input{figures/large-count-table}
 
-Figure~\ref{fig:agreement-bytes} reports gzipped vector payload, excluding startup and text. Payload size is independent of network conditions, which can vary during runs. Observed retrieval time scaled approximately linearly with payload across probe settings.
+Payload size in Figure~\ref{fig:agreement-bytes} is independent of network conditions, which can vary during runs. Observed retrieval time scaled approximately linearly with payload across probe settings.
 \begin{figure}[tb]
 \centering
 \includegraphics[width=\columnwidth]{agreement-bytes.pdf}
 \Description{Top-1 agreement with exact Faiss search in percent against mean gzipped vector payload in decimal megabytes per query for 8,192, 16,384 and 32,768 clusters with FP16 centroids and noise magnitude 0.4. Sixteen configurations are shown, with probes 2, 3, 4 and 5 at 8k and six settings each at 16k and 32k. Small markers and probe labels distinguish the curves. Shading shows pointwise 95 percent Wilson intervals, clipped below 94.9 percent agreement. Payload excludes startup assets, result text and HTTP headers.}
-\caption{Top-1 agreement with FP16 centroids versus vector payload ($10{,}000$ queries/setting). Shading shows pointwise $95\%$ Wilson intervals. Labels mark probes.}
+\caption{Top-1 agreement with FP16 centroids ($10{,}000$ synthetic queries/setting; $\alpha=0.4$) versus gzipped vector payload (startup/text excluded). Labels: probes; shading: pointwise $95\%$ Wilson intervals, clipped below $94.9\%$.}
 \label{fig:agreement-bytes}
 \end{figure}
 
