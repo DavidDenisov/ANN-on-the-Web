@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 David Denisov
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Package and deploy comparison assets to Cloudflare Pages."""
 
 import argparse

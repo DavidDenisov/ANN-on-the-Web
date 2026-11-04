@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 David Denisov
+// SPDX-License-Identifier: AGPL-3.0-only
+
 // Convert the complete Wikipedia metadata bundle to 500-passage Brotli files.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');

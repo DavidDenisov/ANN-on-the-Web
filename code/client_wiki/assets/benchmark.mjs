@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 David Denisov
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { CODEC_LABELS, CLUSTER_COUNTS, CLUSTER_FETCH_CONCURRENCY, networkPolicy, fetchJson, fetchBytes, loadCentroids, searchVectors } from './retrieval.mjs';
 
 /**

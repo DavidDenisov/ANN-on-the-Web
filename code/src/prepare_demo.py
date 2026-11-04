@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 David Denisov
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Prepare full-corpus Wikipedia text while reusing the three uploaded vector indexes."""
 
 import argparse

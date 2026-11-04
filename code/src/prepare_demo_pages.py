@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 David Denisov
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Package the search client and 500-passage Brotli files into 1,000-file Pages uploads."""
 
 import argparse
@@ -15,7 +18,7 @@ from paper_settings import DEMO_INDEX_PATHS
 
 
 CODE = Path(__file__).resolve().parents[1]
-CLIENT_FILES = ("index.html", "benchmark.html", "DATA-NOTICE.txt", "assets/styles.css", "assets/search.mjs",
+CLIENT_FILES = ("index.html", "benchmark.html", "LICENSE.txt", "DATA-NOTICE.txt", "assets/styles.css", "assets/search.mjs",
                 "assets/embedding-worker.mjs", "assets/search-index.mjs", "assets/benchmark.mjs", "assets/retrieval.mjs", "assets/lab.mjs",
                 "assets/exact-top1.json",
                 "assets/fonts/inter-v20-latin-regular.woff2", "assets/fonts/inter-v20-latin-500.woff2",

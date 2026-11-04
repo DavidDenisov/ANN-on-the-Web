@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 David Denisov
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Validate shared browser measurement records without loading plotting libraries."""
 
 from collections.abc import Iterable

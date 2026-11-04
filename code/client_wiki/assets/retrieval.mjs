@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 David Denisov
+// SPDX-License-Identifier: AGPL-3.0-only
+
 /**
  * @typedef {'f16'|'sq8'|'sq6'|'sq4'|'int8'|'pq4'} Codec
  * @typedef {{networkMode?: 'internet', assetsBaseUrl?: string, assetsBaseUrls?: string[],

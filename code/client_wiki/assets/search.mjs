@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 David Denisov
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { CODEC_LABELS } from './retrieval.mjs';
 
 const form = document.querySelector('#searchForm');

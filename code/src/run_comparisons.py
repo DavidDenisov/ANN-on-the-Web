@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 David Denisov
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Prepare and run the paper's comparison matrix in a browser, saving every result."""
 
 import argparse

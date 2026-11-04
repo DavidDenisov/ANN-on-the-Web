@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 David Denisov
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Validate and summarize the saved model startup and length-controlled timings."""
 import json
 import sys

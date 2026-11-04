@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 David Denisov
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { loadSuite, warmIndexAssets, benchmark, exactTop1ForSuite, verifyHostingManifest, PAPER_SETTINGS, paperPlan } from './benchmark.mjs';
 import { loadIndex, loadCentroids, internetAssetUrl, CODEC_LABELS } from './retrieval.mjs';
 

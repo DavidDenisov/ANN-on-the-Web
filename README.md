@@ -12,27 +12,31 @@ The search page automatically loads roughly 47 MB of model, runtime, and centroi
 
 The lab defaults to 10 queries per configuration and accepts 1–10,000. Short runs shuffle the prepared query indices once, take the selected number, and reuse that subset across configurations. Result rows show their sample counts, and runs can be canceled. Small samples illustrate behavior; full paper measurements still use all 10,000 queries. Even short checks can transfer hundreds of MB; full checks can take hours and transfer hundreds of GB.
 
-The notices and short-run controls are deployed to the public demo. Update the [Cloudflare frontend](code/docs/publish-demo.md#frontend-update) to publish further changes; source publication alone does not deploy them.
+The data and privacy notices and short-run controls are deployed to the public demo. Update the [Cloudflare frontend](code/docs/publish-demo.md#frontend-update) to publish further changes; source publication alone does not deploy them.
 
-## Source availability and permitted use
+## License
 
-The original application code and accompanying code documentation are
-source-available under the [PolyForm Noncommercial License 1.0.0](LICENSE).
-The licence permits noncommercial use, modification, and redistribution,
-including research and reproduction of the paper's results. It also expressly
-permits use by the organizations listed in its Noncommercial Organizations
-section, regardless of their funding.
+Copyright (c) 2026 David Denisov.
 
-Commercial use outside those permissions, including commercial resale or paid
-hosting, requires a separate licence from the copyright holder. Contact the
-[repository owner](https://github.com/DavidDenisov) to discuss permission.
-The full licence terms govern permitted uses.
+The original application code and accompanying code documentation are open source
+under the [GNU Affero General Public License version 3](LICENSE)
+(`AGPL-3.0-only`). Commercial and noncommercial use, modification, and
+redistribution are permitted under those terms.
+
+Redistributors must preserve copyright and licence notices and provide the
+corresponding source as required by AGPLv3. Modified versions that support remote
+network interaction must prominently offer their corresponding source, including
+modifications, to interacting users at no charge. Credit alone does not satisfy
+all licence requirements. The software is provided without warranty; see
+[LICENSE](LICENSE) for the full terms.
+
+For permissions beyond AGPLv3, contact the
+[repository owner](https://github.com/DavidDenisov) about a separate licence.
 
 The licence covers only the original software and its code documentation.
 The paper, figures, datasets, embeddings, model weights, fonts, ACM template,
-and third-party components retain their applicable separate terms. It does not
-change permissions already granted under other licences. See [LICENSE](LICENSE)
-for the full terms.
+and third-party components retain their applicable separate terms. Permissions
+previously granted under other licences remain subject to those terms.
 
 ## Repository layout
 

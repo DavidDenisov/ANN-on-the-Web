@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 David Denisov
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { loadSuite, benchmark, labPlan, exactTop1ForSuite } from './benchmark.mjs';
 import { fetchJson, loadIndex, CODEC_LABELS as codecNames } from './retrieval.mjs';
 

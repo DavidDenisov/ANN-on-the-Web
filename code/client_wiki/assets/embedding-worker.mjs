@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 David Denisov
+// SPDX-License-Identifier: AGPL-3.0-only
+
 import { loadSearchIndex, loadSearchCentroids, searchIndex } from './search-index.mjs';
 
 const MODEL_ID = 'Xenova/all-MiniLM-L6-v2';

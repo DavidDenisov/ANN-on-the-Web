@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 David Denisov
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Fixed corpus and experiment settings shared by preparation and result readers."""
 
 from pathlib import Path

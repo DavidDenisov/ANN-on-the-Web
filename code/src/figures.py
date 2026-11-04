@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 David Denisov
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Export paper tables and the probe graph from completed Wikipedia measurements."""
 
 import argparse

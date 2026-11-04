@@ -27,7 +27,7 @@ This copies the current search and lab assets and uses the existing Brotli manif
 ## Package layout
 
 - `DATA-NOTICE.txt`: Wikipedia text attribution, CC BY-SA 3.0 licence link, source-article URL instructions, and extraction/packaging changes. Retain it with redistributed text.
-- `root/`: client pages, shared modules/styles/fonts, three search manifests, `_headers`, `_redirects` and `routing.json`. Both pages link to `client_wiki/DATA-NOTICE.txt`.
+- `root/`: client pages, shared modules/styles/fonts, three search manifests, `_headers`, `_redirects` and `routing.json`. Both pages include software copyright, AGPLv3 and source links, and link to `client_wiki/DATA-NOTICE.txt`. The full software licence is bundled at `client_wiki/LICENSE.txt`.
 - `batches/brotli-batch-0/` through `batches/brotli-batch-70/`: compressed metadata, `DATA-NOTICE.txt` and `_headers` for each deployment. Brotli responses link to the licence and adjacent notice through their HTTP `Link` header.
 - `hosting.json`: batch paths and public URLs.
 - `deployment.json`: completed upload hashes, used by the resumable uploader.

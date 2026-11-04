@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 David Denisov
+# SPDX-License-Identifier: AGPL-3.0-only
+
 """Build Wikipedia indexes and noisy-passage comparison datasets."""
 
 from collections.abc import Callable, Iterator
